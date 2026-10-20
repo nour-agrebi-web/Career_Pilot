@@ -1,0 +1,19 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Secrets : ne jamais commiter les vrais .env
+.env
+!.env.example
+
+# CV importés et générés (données personnelles)
+uploads/
+storage/
+
+# IDE / OS
+.idea/
+.DS_Store
+Thumbs.db
