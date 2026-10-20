@@ -14,7 +14,7 @@ android/   Application Android native : Kotlin, Jetpack Compose, Retrofit (à ou
 
 ## Prérequis
 
-- Python 3.12
+- Python 3.12 ou 3.13 (les versions plus récentes n'ont pas encore toutes les dépendances précompilées sous Windows)
 - PostgreSQL 18
 - Android Studio (avec un émulateur Android, API 26 ou plus)
 
@@ -38,8 +38,9 @@ python -m venv .venv
 .venv\Scripts\Activate.ps1          # macOS/Linux : source .venv/bin/activate
 pip install -r requirements.txt
 copy .env.example .env              # puis mettre un vrai JWT_SECRET
-alembic upgrade head                # crée les tables
-fastapi dev app/main.py             # API sur http://127.0.0.1:8000/docs
+alembic upgrade head                # crée les tables (ou : psql ... -f seeds/schema.sql)
+psql -U careerpilot -h localhost -d careerpilot_db -f seeds/seed_dev.sql   # comptes de test
+uvicorn app.main:app --reload       # API sur http://127.0.0.1:8000/docs
 pytest                              # lance les tests (base careerpilot_test)
 ```
 
@@ -56,11 +57,11 @@ Créer un administrateur : s'inscrire normalement, puis dans psql `UPDATE users 
 
 ## 3. Application Android
 
-1. Lancer l'API avec `fastapi dev app/main.py` (étape 2).
+1. Lancer l'API avec `uvicorn app.main:app --reload` (étape 2).
 2. Dans Android Studio : **File > Open** puis choisir le dossier `android/` (pas la racine du dépôt).
 3. Attendre la fin de la synchronisation Gradle, puis lancer `app` sur un émulateur.
 
-L'émulateur joint l'API du PC via `http://10.0.2.2:8000/` (réglé dans `android/gradle.properties`). Sur un vrai téléphone, lancer l'API avec `fastapi dev app/main.py --host 0.0.0.0` et remplacer `careerpilot.apiUrl` par `http://<IP-du-PC>:8000/`.
+L'émulateur joint l'API du PC via `http://10.0.2.2:8000/` (réglé dans `android/gradle.properties`). Sur un vrai téléphone, lancer l'API avec `uvicorn app.main:app --reload --host 0.0.0.0` et remplacer `careerpilot.apiUrl` par `http://<IP-du-PC>:8000/`.
 
 ```text
 android/app/src/main/java/tn/careerpilot/
