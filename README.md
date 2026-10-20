@@ -8,16 +8,15 @@ Projet d'Intégration · ISET Radès · 2026/2027 · Mohamed Amine Hayouni, Nour
 
 ```text
 backend/   API FastAPI (Python), monolithe modulaire : auth, cv, profile, offers, notifications, admin
-mobile/    Application React Native (Expo, TypeScript)
-.github/   Intégration continue : tests backend + vérification TypeScript du mobile
+android/   Application Android native : Kotlin, Jetpack Compose, Retrofit (à ouvrir dans Android Studio)
+.github/   Intégration continue : tests backend + tests et compilation de l'app Android
 ```
 
 ## Prérequis
 
 - Python 3.12
-- Node.js 22
 - PostgreSQL 18
-- Android Studio (émulateur) ou l'application Expo Go sur un téléphone
+- Android Studio (avec un émulateur Android, API 26 ou plus)
 
 ## 1. Base de données (une fois par machine)
 
@@ -55,16 +54,22 @@ alembic upgrade head
 
 Créer un administrateur : s'inscrire normalement, puis dans psql `UPDATE users SET role = 'ADMIN' WHERE email = '...';`
 
-## 3. Mobile
+## 3. Application Android
 
-```powershell
-cd mobile
-npm install
-copy .env.example .env              # adresse de l'API
-npx expo start                      # puis "a" pour l'émulateur Android
+1. Lancer l'API avec `fastapi dev app/main.py` (étape 2).
+2. Dans Android Studio : **File > Open** puis choisir le dossier `android/` (pas la racine du dépôt).
+3. Attendre la fin de la synchronisation Gradle, puis lancer `app` sur un émulateur.
+
+L'émulateur joint l'API du PC via `http://10.0.2.2:8000/` (réglé dans `android/gradle.properties`). Sur un vrai téléphone, lancer l'API avec `fastapi dev app/main.py --host 0.0.0.0` et remplacer `careerpilot.apiUrl` par `http://<IP-du-PC>:8000/`.
+
+```text
+android/app/src/main/java/tn/careerpilot/
+  MainActivity.kt         point d'entrée
+  CareerPilotApp.kt       création des objets partagés (API, stockage des jetons)
+  data/                   Retrofit, jetons JWT chiffrés (Android Keystore), refresh automatique sur 401
+  ui/auth/                écrans de connexion et d'inscription, AuthViewModel
+  ui/home/                accueil (provisoire)
 ```
-
-Sur un vrai téléphone, lancer l'API avec `fastapi dev app/main.py --host 0.0.0.0` et mettre `EXPO_PUBLIC_API_URL=http://<IP-du-PC>:8000` dans `mobile/.env`.
 
 ## API d'authentification
 
