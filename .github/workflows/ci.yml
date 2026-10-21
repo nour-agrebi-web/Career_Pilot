@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       mongo:
-        image: mongo:8.0
+        image: mongo:8.0.34  # épinglée : la nouvelle image 8.0 refuse de démarrer sur ce noyau (SERVER-121912)
         ports: ["27017:27017"]
         env:
           # Les runners GitHub ont un noyau Linux >= 6.19 : MongoDB refuse de démarrer si glibc
