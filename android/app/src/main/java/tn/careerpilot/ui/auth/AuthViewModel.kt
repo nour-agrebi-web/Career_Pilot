@@ -1,5 +1,6 @@
 package tn.careerpilot.ui.auth
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.viewModelScope
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import tn.careerpilot.BuildConfig
 import tn.careerpilot.CareerPilotApp
 import tn.careerpilot.data.AuthRepository
 import tn.careerpilot.data.CurrentUser
@@ -75,7 +77,8 @@ class AuthViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _form.value = FormState(error = e.toUserMessage())
+                Log.w("CareerPilot", "Appel API échoué (${BuildConfig.API_URL})", e) // visible dans Logcat
+                _form.value = FormState(error = e.toUserMessage(BuildConfig.API_URL))
             }
         }
     }

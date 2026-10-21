@@ -5,7 +5,7 @@ import retrofit2.HttpException
 import java.io.IOException
 
 /** Transforme une erreur réseau ou HTTP en message lisible pour l'utilisateur. */
-fun Throwable.toUserMessage(): String = when (this) {
+fun Throwable.toUserMessage(apiUrl: String? = null): String = when (this) {
     is HttpException -> {
         val detail = runCatching {
             JsonParser.parseString(response()?.errorBody()?.string()).asJsonObject.get("detail")
@@ -16,6 +16,9 @@ fun Throwable.toUserMessage(): String = when (this) {
             else -> "Erreur du serveur (${code()})."
         }
     }
-    is IOException -> "Impossible de joindre le serveur. Vérifiez que l'API est lancée."
+    // Le détail technique (type d'erreur + message) aide à savoir pourquoi la connexion échoue :
+    // ConnectException = API non lancée ou mauvaise adresse, UnknownServiceException = HTTP bloqué, etc.
+    is IOException -> "Impossible de joindre le serveur" + (apiUrl?.let { " ($it)" } ?: "") +
+        ".\nDétail : ${javaClass.simpleName}: $message"
     else -> "Une erreur inattendue est survenue."
 }
