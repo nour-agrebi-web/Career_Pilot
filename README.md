@@ -7,7 +7,7 @@ Projet d'Intégration · ISET Radès · 2026/2027 · Mohamed Amine Hayouni, Nour
 ## Structure
 
 ```text
-backend/   API FastAPI (Python), monolithe modulaire : auth, cv, profile, offers, notifications, admin
+backend/   API FastAPI (Python) + MongoDB, monolithe modulaire : auth, cv, profile, offers, notifications, admin
 android/   Application Android native : Kotlin, Jetpack Compose, Retrofit (à ouvrir dans Android Studio)
 .github/   Intégration continue : tests backend + tests et compilation de l'app Android
 ```
@@ -15,45 +15,33 @@ android/   Application Android native : Kotlin, Jetpack Compose, Retrofit (à ou
 ## Prérequis
 
 - Python 3.12 ou 3.13 (les versions plus récentes n'ont pas encore toutes les dépendances précompilées sous Windows)
-- PostgreSQL 18
+- MongoDB Community Server 8 (avec MongoDB Compass pour voir les données)
 - Android Studio (avec un émulateur Android, API 26 ou plus)
 
-## 1. Base de données (une fois par machine)
+## 1. Base de données MongoDB (une fois par machine)
 
-```powershell
-psql -U postgres -h localhost
-```
+1. Télécharger **MongoDB Community Server** (Windows, msi) sur mongodb.com/try/download/community.
+2. Pendant l'installation : choisir **Complete**, laisser cocher **Install MongoD as a Service** et **Install MongoDB Compass**.
+3. Vérifier : ouvrir Compass et se connecter à `mongodb://localhost:27017`.
 
-```sql
-CREATE ROLE careerpilot WITH LOGIN PASSWORD 'ChangeMoi_2026!';
-CREATE DATABASE careerpilot_db   OWNER careerpilot ENCODING 'UTF8';
-CREATE DATABASE careerpilot_test OWNER careerpilot ENCODING 'UTF8';
-```
+Pas besoin de créer la base ni les collections : MongoDB les crée au premier enregistrement, et l'API crée ses index au démarrage.
 
 ## 2. Backend
 
 ```powershell
 cd backend
-python -m venv .venv
-.venv\Scripts\Activate.ps1          # macOS/Linux : source .venv/bin/activate
+py -3.13 -m venv .venv
+.venv\Scripts\activate
 pip install -r requirements.txt
 copy .env.example .env              # puis mettre un vrai JWT_SECRET
-alembic upgrade head                # crée les tables (ou : psql ... -f seeds/schema.sql)
-psql -U careerpilot -h localhost -d careerpilot_db -f seeds/seed_dev.sql   # comptes de test
+python -m seeds.seed_dev            # comptes de test (mot de passe : motdepasse123)
 uvicorn app.main:app --reload       # API sur http://127.0.0.1:8000/docs
 pytest                              # lance les tests (base careerpilot_test)
 ```
 
 Générer un `JWT_SECRET` : `python -c "import secrets; print(secrets.token_urlsafe(64))"`.
 
-Modifier un modèle SQLAlchemy, puis créer la migration :
-
-```powershell
-alembic revision --autogenerate -m "description du changement"
-alembic upgrade head
-```
-
-Créer un administrateur : s'inscrire normalement, puis dans psql `UPDATE users SET role = 'ADMIN' WHERE email = '...';`
+Créer un administrateur : s'inscrire normalement, puis dans Compass (ou mongosh) passer le champ `role` du document à `"admin"`. Le script de données crée déjà `admin@careerpilot.tn`.
 
 ## 3. Application Android
 

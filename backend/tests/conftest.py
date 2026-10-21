@@ -1,35 +1,26 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
-from app.db.base import Base
-from app.db.session import get_db
+from app.db.mongo import client as mongo_client, create_indexes, get_db
 from app.main import app
 
-if not settings.test_database_url:
-    pytest.exit("TEST_DATABASE_URL manquant dans le .env : les tests ne tournent jamais sur la base de dev.")
-
-engine = create_engine(settings.test_database_url)
-TestingSession = sessionmaker(bind=engine, expire_on_commit=False)
+# Les tests utilisent une base séparée (careerpilot_test), vidée avant et après chaque test.
+TEST_DB = settings.mongodb_test_db
+assert TEST_DB != settings.mongodb_db, "La base de test doit être différente de la base de dev."
 
 
 @pytest.fixture()
 def db():
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
-    with TestingSession() as session:
-        yield session
-    Base.metadata.drop_all(engine)
+    mongo_client.drop_database(TEST_DB)
+    database = mongo_client[TEST_DB]
+    create_indexes(database)
+    yield database
+    mongo_client.drop_database(TEST_DB)
 
 
 @pytest.fixture()
 def client(db):
-    def override_get_db():
-        with TestingSession() as session:
-            yield session
-
-    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_db] = lambda: db
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()

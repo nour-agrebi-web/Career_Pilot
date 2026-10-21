@@ -1,4 +1,4 @@
-from app.modules.auth.models import Role, User
+from app.modules.auth.models import Role
 from tests.conftest import login, register
 
 
@@ -24,9 +24,9 @@ def test_inscription_refusee_si_email_deja_utilise(client):
 
 def test_mot_de_passe_hache(client, db):
     register(client)
-    user = db.query(User).one()
-    assert user.password_hash != "motdepasse123"
-    assert user.consent is True and user.consent_at is not None
+    user = db.users.find_one({"email": "nour@example.com"})
+    assert user["password_hash"] != "motdepasse123"
+    assert user["consent"] is True and user["consent_at"] is not None
 
 
 # US-1.2.1
@@ -69,8 +69,11 @@ def test_admin_reserve_aux_administrateurs(client, db):
     tokens = login(client).json()
     assert client.get("/admin/stats", headers=bearer(tokens["access_token"])).status_code == 403
 
-    user = db.query(User).one()
-    user.role = Role.ADMIN
-    db.commit()
+    db.users.update_one({"email": "nour@example.com"}, {"$set": {"role": Role.ADMIN.value}})
     r = client.get("/admin/stats", headers=bearer(tokens["access_token"]))
     assert r.status_code == 200 and r.json() == {"users": 1}
+
+
+def test_jeton_avec_identifiant_invalide_refuse(client):
+    assert client.get("/users/me", headers=bearer("pas-un-jwt")).status_code == 401
+    assert client.post("/auth/refresh", json={"refresh_token": "pas-un-jwt"}).status_code == 401
