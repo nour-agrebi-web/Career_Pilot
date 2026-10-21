@@ -35,7 +35,7 @@ py -3.13 -m venv .venv
 pip install -r requirements.txt
 copy .env.example .env              # puis mettre un vrai JWT_SECRET
 python -m seeds.seed_dev            # comptes de test (mot de passe : motdepasse123)
-uvicorn app.main:app --reload       # API sur http://127.0.0.1:8000/docs
+python -m app                       # API sur http://127.0.0.1:8000/docs (écoute sur 0.0.0.0)
 pytest                              # lance les tests (base careerpilot_test)
 ```
 
@@ -45,11 +45,18 @@ Créer un administrateur : s'inscrire normalement, puis dans Compass (ou mongosh
 
 ## 3. Application Android
 
-1. Lancer l'API avec `uvicorn app.main:app --reload` (étape 2).
+1. Lancer l'API avec `python -m app` (étape 2). Si Windows demande l'accès réseau pour Python, cliquer sur **Autoriser**.
 2. Dans Android Studio : **File > Open** puis choisir le dossier `android/` (pas la racine du dépôt).
 3. Attendre la fin de la synchronisation Gradle, puis lancer `app` sur un émulateur.
 
-L'émulateur joint l'API du PC via `http://10.0.2.2:8000/` (réglé dans `android/gradle.properties`). Sur un vrai téléphone, lancer l'API avec `uvicorn app.main:app --reload --host 0.0.0.0` et remplacer `careerpilot.apiUrl` par `http://<IP-du-PC>:8000/`.
+L'émulateur joint l'API du PC via `http://10.0.2.2:8000/` (réglé dans `android/gradle.properties`). Pour vérifier, ouvrir `http://10.0.2.2:8000/docs` dans le Chrome de l'émulateur.
+
+Si l'app affiche « Impossible de joindre le serveur » :
+- vérifier que `python -m app` tourne toujours ;
+- sur un vrai téléphone, 10.0.2.2 n'existe pas : remplacer `careerpilot.apiUrl` par `http://<IP-du-PC>:8000/` (PC et téléphone sur le même Wi-Fi) ;
+- en dernier recours (émulateur ou téléphone USB) : `adb reverse tcp:8000 tcp:8000` et `careerpilot.apiUrl=http://127.0.0.1:8000/`, à relancer après chaque redémarrage de l'appareil.
+
+Après 3 échecs de connexion, l'e-mail est bloqué 3 min au 4e échec et au 5e, puis 15 min à partir du 6e ; l'app affiche le compte à rebours. Une connexion réussie remet le compteur à zéro. Pour débloquer un compte en dev, supprimer son document dans la collection `login_attempts`.
 
 ```text
 android/app/src/main/java/tn/careerpilot/

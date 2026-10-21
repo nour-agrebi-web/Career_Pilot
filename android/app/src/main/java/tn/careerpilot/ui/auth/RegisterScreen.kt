@@ -38,6 +38,7 @@ fun RegisterScreen(
 ) {
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
+    val lockSecondsLeft = rememberLockSecondsLeft(form)
     var language by rememberSaveable { mutableStateOf("fr") }
     var consent by rememberSaveable { mutableStateOf(false) }
 
@@ -103,11 +104,11 @@ fun RegisterScreen(
             )
         }
 
-        ErrorText(form.error)
+        ErrorText(authMessage(form, lockSecondsLeft))
         SubmitButton(
             "Créer mon compte",
             loading = form.loading,
-            enabled = consent && email.isNotBlank() && password.length >= 8,
+            enabled = consent && email.isNotBlank() && password.length >= 8 && lockSecondsLeft == 0,
         ) { onRegister(email, password, language, consent) }
         AuthSwitchLink("Déjà un compte ?", "Se connecter", onGoToLogin)
     }

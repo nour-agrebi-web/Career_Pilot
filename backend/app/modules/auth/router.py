@@ -1,3 +1,4 @@
+import math
 import jwt
 from datetime import datetime, timedelta, timezone
 from bson import ObjectId
@@ -12,6 +13,7 @@ from app.db.mongo import get_db
 from app.modules.auth.models import new_user
 from app.modules.auth.schemas import RegisterIn, TokenPair, RefreshIn
 from app.modules.auth.deps import get_current_user
+from app.modules.auth import lockout
 
 router = APIRouter(tags=["auth"])
 
@@ -46,11 +48,27 @@ def register(data: RegisterIn, db: Database = Depends(get_db)):
         raise HTTPException(409, "Un compte existe déjà avec cet e-mail.")
     return {"id": str(user["_id"]), "email": user["email"]}
 
+def too_many_attempts(seconds: int) -> HTTPException:
+    minutes = math.ceil(seconds / 60)
+    return HTTPException(
+        429,
+        f"Trop de tentatives. Réessayez dans {minutes} min.",
+        headers={"Retry-After": str(seconds)},  # l'app s'en sert pour son compte à rebours
+    )
+
 @router.post("/auth/login", response_model=TokenPair)
 def login(form: OAuth2PasswordRequestForm = Depends(), db: Database = Depends(get_db)):
-    user = db.users.find_one({"email": form.username.lower()})
+    email = form.username.lower()
+    # Pendant un blocage, le mot de passe n'est même pas vérifié.
+    if seconds := lockout.seconds_left(db, email):
+        raise too_many_attempts(seconds)
+    user = db.users.find_one({"email": email})
     if user is None or not verify_password(form.password, user["password_hash"]):
+        # Compté aussi pour un e-mail inconnu, pour ne pas révéler quels comptes existent.
+        if seconds := lockout.record_failure(db, email):
+            raise too_many_attempts(seconds)
         raise HTTPException(401, "E-mail ou mot de passe incorrect.")  # US-1.2.1 : message unique
+    lockout.reset(db, email)
     return issue_tokens(db, user["_id"])
 
 @router.post("/auth/refresh", response_model=TokenPair)

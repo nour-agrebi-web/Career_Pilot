@@ -14,6 +14,7 @@ fun LoginScreen(
 ) {
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
+    val lockSecondsLeft = rememberLockSecondsLeft(form)
 
     AuthScaffold(
         title = "Bienvenue",
@@ -21,10 +22,12 @@ fun LoginScreen(
     ) {
         EmailField(email) { email = it }
         PasswordField(password, { password = it })
-        ErrorText(form.error) // US-1.2.1 : message unique, sans dire quel champ est faux
-        SubmitButton("Se connecter", loading = form.loading, enabled = email.isNotBlank() && password.isNotEmpty()) {
-            onLogin(email, password)
-        }
+        ErrorText(authMessage(form, lockSecondsLeft)) // US-1.2.1 : message unique, sans dire quel champ est faux
+        SubmitButton(
+            "Se connecter",
+            loading = form.loading,
+            enabled = email.isNotBlank() && password.isNotEmpty() && lockSecondsLeft == 0,
+        ) { onLogin(email, password) }
         AuthSwitchLink("Pas encore de compte ?", "Créer un compte", onGoToRegister)
     }
 }

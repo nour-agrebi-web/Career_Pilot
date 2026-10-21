@@ -32,6 +32,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -52,6 +53,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import tn.careerpilot.ui.theme.Aqua
 import tn.careerpilot.ui.theme.DmSans
 import tn.careerpilot.ui.theme.Ink
@@ -294,3 +296,23 @@ fun AuthSwitchLink(prompt: String, action: String, onClick: () -> Unit) {
         Text(action, color = colors.accent, fontFamily = DmSans, fontWeight = FontWeight.Bold, fontSize = 12.sp)
     }
 }
+
+/** Secondes de blocage restantes, mises à jour chaque seconde tant que le blocage dure. */
+@Composable
+fun rememberLockSecondsLeft(form: FormState): Int {
+    val secondsLeft by produceState(form.lockSecondsLeft(), form.lockedUntil) {
+        while (value > 0) {
+            delay(250)
+            value = form.lockSecondsLeft()
+        }
+    }
+    return secondsLeft
+}
+
+/** Message affiché sous les champs : compte à rebours pendant un blocage, sinon l'erreur éventuelle. */
+fun authMessage(form: FormState, lockSecondsLeft: Int): String? =
+    if (lockSecondsLeft > 0) {
+        "Trop de tentatives. Réessayez dans %d:%02d.".format(lockSecondsLeft / 60, lockSecondsLeft % 60)
+    } else {
+        form.error
+    }
