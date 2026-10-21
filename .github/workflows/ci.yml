@@ -12,6 +12,10 @@ jobs:
       mongo:
         image: mongo:8.0
         ports: ["27017:27017"]
+        env:
+          # Les runners GitHub ont un noyau Linux >= 6.19 : MongoDB refuse de démarrer si glibc
+          # utilise rseq (https://jira.mongodb.org/browse/SERVER-121912). On le désactive.
+          GLIBC_TUNABLES: glibc.pthread.rseq=0
         options: >-
           --health-cmd "mongosh --quiet --eval 'db.runCommand({ping: 1})'"
           --health-interval 5s --health-timeout 5s --health-retries 10
