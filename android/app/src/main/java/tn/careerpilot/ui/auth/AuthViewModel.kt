@@ -14,9 +14,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
-import tn.careerpilot.BuildConfig
 import tn.careerpilot.CareerPilotApp
 import tn.careerpilot.data.AuthRepository
+import tn.careerpilot.data.BASE_URL
 import tn.careerpilot.data.CurrentUser
 import tn.careerpilot.data.toUserMessage
 
@@ -88,13 +88,13 @@ class AuthViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.w("CareerPilot", "Appel API échoué (${BuildConfig.API_URL})", e) // visible dans Logcat
+                Log.w("CareerPilot", "Appel API échoué (${BASE_URL})", e) // visible dans Logcat
                 val retryAfter = (e as? HttpException)?.takeIf { it.code() == 429 }
                     ?.response()?.headers()?.get("Retry-After")?.toLongOrNull()
                 _form.value = if (retryAfter != null) {
                     FormState(lockedUntil = SystemClock.elapsedRealtime() + retryAfter * 1000)
                 } else {
-                    FormState(error = e.toUserMessage(BuildConfig.API_URL))
+                    FormState(error = e.toUserMessage(BASE_URL))
                 }
             }
         }

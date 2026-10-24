@@ -34,7 +34,7 @@ class TokenAuthenticatorTest {
     @After
     fun tearDown() = server.shutdown()
 
-    private fun api() = Network.createApi(server.url("/").toString(), tokens) { expiredCount++ }
+    private fun api() = RetrofitInstance.createApi(server.url("/").toString(), tokens) { expiredCount++ }
 
     private val meJson = """{"id":"1","email":"nour@example.com","language":"fr","role":"candidate"}"""
 

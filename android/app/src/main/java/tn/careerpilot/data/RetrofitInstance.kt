@@ -5,7 +5,17 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
-object Network {
+// Configuration du port de l'API FastAPI locale (python -m app)
+const val API_PORT = 8000
+
+// --- CHOISIR L'ADRESSE EN FONCTION DE VOTRE CIBLE ---
+// 1. Pour l'ÉMULATEUR ANDROID (10.0.2.2 = le PC hôte)
+const val BASE_URL = "http://10.0.2.2:$API_PORT/"
+// 2. Pour un APPAREIL PHYSIQUE (même Wi-Fi que le PC ; IPv4 donnée par ipconfig)
+// const val LOCAL_IP = "192.168.1.5"
+// const val BASE_URL = "http://$LOCAL_IP:$API_PORT/"
+
+object RetrofitInstance {
     fun createApi(baseUrl: String, tokens: TokenStore, onSessionExpired: () -> Unit): ApiService {
         // Client sans authenticator pour le refresh, sinon un 401 sur /auth/refresh bouclerait.
         val plainApi = retrofit(baseUrl, OkHttpClient.Builder().timeouts().build())

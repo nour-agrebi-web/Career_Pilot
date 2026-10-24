@@ -14,9 +14,6 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
-
-        val apiUrl = providers.gradleProperty("careerpilot.apiUrl").getOrElse("http://10.0.2.2:8000/")
-        buildConfigField("String", "API_URL", "\"$apiUrl\"")
     }
 
     buildTypes {
@@ -31,7 +28,6 @@ android {
     }
     buildFeatures {
         compose = true
-        buildConfig = true
     }
 }
 

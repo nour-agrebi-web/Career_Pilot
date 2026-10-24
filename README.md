@@ -49,12 +49,12 @@ Créer un administrateur : s'inscrire normalement, puis dans Compass (ou mongosh
 2. Dans Android Studio : **File > Open** puis choisir le dossier `android/` (pas la racine du dépôt).
 3. Attendre la fin de la synchronisation Gradle, puis lancer `app` sur un émulateur.
 
-L'émulateur joint l'API du PC via `http://10.0.2.2:8000/` (réglé dans `android/gradle.properties`). Pour vérifier, ouvrir `http://10.0.2.2:8000/docs` dans le Chrome de l'émulateur.
+L'émulateur joint l'API du PC via `http://10.0.2.2:8000/` (réglé dans `android/app/src/main/java/tn/careerpilot/data/RetrofitInstance.kt`). Pour vérifier, ouvrir `http://10.0.2.2:8000/docs` dans le Chrome de l'émulateur.
 
 Si l'app affiche « Impossible de joindre le serveur » :
 - vérifier que `python -m app` tourne toujours ;
-- sur un vrai téléphone, 10.0.2.2 n'existe pas : remplacer `careerpilot.apiUrl` par `http://<IP-du-PC>:8000/` (PC et téléphone sur le même Wi-Fi) ;
-- en dernier recours (émulateur ou téléphone USB) : `adb reverse tcp:8000 tcp:8000` et `careerpilot.apiUrl=http://127.0.0.1:8000/`, à relancer après chaque redémarrage de l'appareil.
+- sur un vrai téléphone, 10.0.2.2 n'existe pas : dans `RetrofitInstance.kt`, commenter la ligne de l'émulateur et décommenter `LOCAL_IP` (IPv4 du PC donnée par `ipconfig`) et le second `BASE_URL` ; PC et téléphone sur le même Wi-Fi ;
+- en dernier recours (émulateur ou téléphone USB) : `adb reverse tcp:8000 tcp:8000` et `BASE_URL = "http://127.0.0.1:$API_PORT/"` dans `RetrofitInstance.kt`, à relancer après chaque redémarrage de l'appareil.
 
 Après 3 échecs de connexion, l'e-mail est bloqué 3 min au 4e échec et au 5e, puis 15 min à partir du 6e ; l'app affiche le compte à rebours. Une connexion réussie remet le compteur à zéro. Pour débloquer un compte en dev, supprimer son document dans la collection `login_attempts`.
 

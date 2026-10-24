@@ -6,7 +6,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import tn.careerpilot.data.AuthRepository
 import tn.careerpilot.data.KeystoreTokenStore
-import tn.careerpilot.data.Network
+import tn.careerpilot.data.BASE_URL
+import tn.careerpilot.data.RetrofitInstance
 
 /** Point d'entrée de l'application : crée une seule fois les objets partagés (injection manuelle). */
 class CareerPilotApp : Application() {
@@ -27,7 +28,7 @@ class AppContainer(app: Application) {
     val sessionExpired: SharedFlow<Unit> = _sessionExpired
 
     private val tokens = KeystoreTokenStore(app)
-    private val api = Network.createApi(BuildConfig.API_URL, tokens) { _sessionExpired.tryEmit(Unit) }
+    private val api = RetrofitInstance.createApi(BASE_URL, tokens) { _sessionExpired.tryEmit(Unit) }
 
     val authRepository = AuthRepository(api, tokens)
 }
