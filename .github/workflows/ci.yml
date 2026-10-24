@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        # MongoDB 8.x refuse de démarrer sur les noyaux Linux >= 6.19 de certains runners
+        # (https://jira.mongodb.org/browse/SERVER-121912). La 7.0 n'a pas ce problème et suffit aux tests.
+        image: mongo:7.0
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping: 1})'"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      MONGODB_URL: mongodb://localhost:27017
+      JWT_SECRET: secret-de-test-uniquement-pour-la-ci
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt
+      - name: Tests
+        run: pytest -q
+      - name: Données de test
+        run: python -m seeds.seed_dev
+
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Tests unitaires et compilation de l'APK
+        run: ./gradlew testDebugUnitTest assembleDebug --no-daemon

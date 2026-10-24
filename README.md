@@ -7,64 +7,65 @@ Projet d'Intégration · ISET Radès · 2026/2027 · Mohamed Amine Hayouni, Nour
 ## Structure
 
 ```text
-backend/   API FastAPI (Python), monolithe modulaire : auth, cv, profile, offers, notifications, admin
-mobile/    Application React Native (Expo, TypeScript)
-.github/   Intégration continue : tests backend + vérification TypeScript du mobile
+backend/   API FastAPI (Python) + MongoDB, monolithe modulaire : auth, cv, profile, offers, notifications, admin
+android/   Application Android native : Kotlin, Jetpack Compose, Retrofit (à ouvrir dans Android Studio)
+.github/   Intégration continue : tests backend + tests et compilation de l'app Android
 ```
 
 ## Prérequis
 
-- Python 3.12
-- Node.js 22
-- PostgreSQL 18
-- Android Studio (émulateur) ou l'application Expo Go sur un téléphone
+- Python 3.12 ou 3.13 (les versions plus récentes n'ont pas encore toutes les dépendances précompilées sous Windows)
+- MongoDB Community Server 8 (avec MongoDB Compass pour voir les données)
+- Android Studio (avec un émulateur Android, API 26 ou plus)
 
-## 1. Base de données (une fois par machine)
+## 1. Base de données MongoDB (une fois par machine)
 
-```powershell
-psql -U postgres -h localhost
-```
+1. Télécharger **MongoDB Community Server** (Windows, msi) sur mongodb.com/try/download/community.
+2. Pendant l'installation : choisir **Complete**, laisser cocher **Install MongoD as a Service** et **Install MongoDB Compass**.
+3. Vérifier : ouvrir Compass et se connecter à `mongodb://localhost:27017`.
 
-```sql
-CREATE ROLE careerpilot WITH LOGIN PASSWORD 'ChangeMoi_2026!';
-CREATE DATABASE careerpilot_db   OWNER careerpilot ENCODING 'UTF8';
-CREATE DATABASE careerpilot_test OWNER careerpilot ENCODING 'UTF8';
-```
+Pas besoin de créer la base ni les collections : MongoDB les crée au premier enregistrement, et l'API crée ses index au démarrage.
 
 ## 2. Backend
 
 ```powershell
 cd backend
-python -m venv .venv
-.venv\Scripts\Activate.ps1          # macOS/Linux : source .venv/bin/activate
+py -3.13 -m venv .venv
+.venv\Scripts\activate
 pip install -r requirements.txt
 copy .env.example .env              # puis mettre un vrai JWT_SECRET
-alembic upgrade head                # crée les tables
-fastapi dev app/main.py             # API sur http://127.0.0.1:8000/docs
+python -m seeds.seed_dev            # comptes de test (mot de passe : motdepasse123)
+python -m app                       # API sur http://127.0.0.1:8000/docs (écoute sur 0.0.0.0)
 pytest                              # lance les tests (base careerpilot_test)
 ```
 
 Générer un `JWT_SECRET` : `python -c "import secrets; print(secrets.token_urlsafe(64))"`.
 
-Modifier un modèle SQLAlchemy, puis créer la migration :
+Créer un administrateur : s'inscrire normalement, puis dans Compass (ou mongosh) passer le champ `role` du document à `"admin"`. Le script de données crée déjà `admin@careerpilot.tn`.
 
-```powershell
-alembic revision --autogenerate -m "description du changement"
-alembic upgrade head
+## 3. Application Android
+
+1. Lancer l'API avec `python -m app` (étape 2). Si Windows demande l'accès réseau pour Python, cliquer sur **Autoriser**.
+2. Dans Android Studio : **File > Open** puis choisir le dossier `android/` (pas la racine du dépôt).
+3. Attendre la fin de la synchronisation Gradle, puis lancer `app` sur un émulateur.
+
+L'émulateur joint l'API du PC via `http://10.0.2.2:8000/` (réglé dans `android/app/src/main/java/tn/careerpilot/data/RetrofitInstance.kt`). Pour vérifier, ouvrir `http://10.0.2.2:8000/docs` dans le Chrome de l'émulateur.
+
+Si l'app affiche « Impossible de joindre le serveur » :
+- vérifier que `python -m app` tourne toujours ;
+- sur un vrai téléphone, 10.0.2.2 n'existe pas : dans `RetrofitInstance.kt`, commenter la ligne de l'émulateur et décommenter `LOCAL_IP` (IPv4 du PC donnée par `ipconfig`) et le second `BASE_URL` ; PC et téléphone sur le même Wi-Fi ;
+- en dernier recours (émulateur ou téléphone USB) : `adb reverse tcp:8000 tcp:8000` et `BASE_URL = "http://127.0.0.1:$API_PORT/"` dans `RetrofitInstance.kt`, à relancer après chaque redémarrage de l'appareil.
+
+Après 3 échecs de connexion, l'e-mail est bloqué 3 min au 4e échec et au 5e, puis 15 min à partir du 6e ; l'app affiche le compte à rebours. Une connexion réussie remet le compteur à zéro. Pour débloquer un compte en dev, supprimer son document dans la collection `login_attempts`.
+
+```text
+android/app/src/main/java/tn/careerpilot/
+  MainActivity.kt         point d'entrée
+  CareerPilotApp.kt       création des objets partagés (API, stockage des jetons)
+  data/                   Retrofit, jetons JWT chiffrés (Android Keystore), refresh automatique sur 401
+  ui/auth/                écrans de connexion et d'inscription, AuthViewModel
+  ui/home/                accueil (provisoire)
 ```
-
-Créer un administrateur : s'inscrire normalement, puis dans psql `UPDATE users SET role = 'ADMIN' WHERE email = '...';`
-
-## 3. Mobile
-
-```powershell
-cd mobile
-npm install
-copy .env.example .env              # adresse de l'API
-npx expo start                      # puis "a" pour l'émulateur Android
-```
-
-Sur un vrai téléphone, lancer l'API avec `fastapi dev app/main.py --host 0.0.0.0` et mettre `EXPO_PUBLIC_API_URL=http://<IP-du-PC>:8000` dans `mobile/.env`.
 
 ## API d'authentification
 
