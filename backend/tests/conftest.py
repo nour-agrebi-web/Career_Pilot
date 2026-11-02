@@ -32,3 +32,20 @@ def register(client, email="nour@example.com", password="motdepasse123", consent
 
 def login(client, email="nour@example.com", password="motdepasse123"):
     return client.post("/auth/login", data={"username": email, "password": password})
+
+
+def auth_headers(client, email="nour@example.com"):
+    register(client, email=email)
+    token = login(client, email=email).json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture()
+def headers(client):
+    return auth_headers(client)
+
+
+@pytest.fixture()
+def storage(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "storage_dir", str(tmp_path))
+    return tmp_path

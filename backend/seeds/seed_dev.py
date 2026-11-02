@@ -11,6 +11,7 @@ from bson import ObjectId
 from app.core.security import hash_password
 from app.db.mongo import create_indexes, get_db
 from app.modules.auth.models import Role
+from seeds.offers_dev import seed_offers
 
 PASSWORD = "motdepasse123"
 
@@ -44,6 +45,7 @@ def main() -> None:
         )
         print(("ajouté   " if result.upserted_id else "existant ") + f"{email} ({role.value})")
     print(f"{db.users.count_documents({})} utilisateurs dans la base « {db.name} ».")
+    print(f"{seed_offers(db)} offres d'exemple ajoutées ({db.offers.count_documents({})} au total).")
 
 
 if __name__ == "__main__":

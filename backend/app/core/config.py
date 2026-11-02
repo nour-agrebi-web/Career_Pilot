@@ -9,5 +9,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_minutes: int = 15
     refresh_token_days: int = 7
+    # Dossier des CV importés (ignoré par Git : données personnelles).
+    storage_dir: str = "storage"
 
 settings = Settings()
