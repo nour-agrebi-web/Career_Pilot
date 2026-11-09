@@ -98,7 +98,9 @@ fun MainScreen(user: CurrentUser, onLogout: () -> Unit) {
                         SavedScreen(matchesViewModel, onOpen = { navController.navigate("match/${it.id}") })
                     }
                     composable(Tab.PROFILE.route) { ProfileScreen(viewModel(factory = AppViewModelFactory)) }
-                    composable(Tab.CV.route) { CvScreen(viewModel(factory = AppViewModelFactory)) }
+                    composable(Tab.CV.route) {
+                        CvScreen(viewModel(factory = AppViewModelFactory), onOpenProfile = { openTab(Tab.PROFILE.route) })
+                    }
                     composable(Tab.SETTINGS.route) {
                         PreferencesScreen(viewModel(factory = AppViewModelFactory), email = user.email, onLogout = onLogout)
                     }

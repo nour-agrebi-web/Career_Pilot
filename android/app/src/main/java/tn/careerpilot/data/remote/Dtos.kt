@@ -55,7 +55,65 @@ data class CvDto(
     val status: String,
     val active: Boolean,
     @SerializedName("created_at") val createdAt: String,
+    @SerializedName("error_code") val errorCode: String? = null,
+    val error: String? = null,
+    val applied: Boolean = false,
 )
+
+/** Profil déduit du CV (brouillon) : les champs peuvent manquer, le candidat les complète. */
+data class ProfileDraftDto(
+    val domain: String?,
+    val level: String?,
+    val skills: List<SkillDto>?,
+    val experiences: List<DraftExperienceDto>?,
+    val educations: List<DraftEducationDto>?,
+    val languages: List<DraftLanguageDto>?,
+)
+
+data class DraftExperienceDto(
+    val position: String?,
+    val company: String?,
+    @SerializedName("start_date") val startDate: String?,
+    @SerializedName("end_date") val endDate: String?,
+)
+
+data class DraftEducationDto(
+    val degree: String?,
+    val institution: String?,
+    @SerializedName("start_date") val startDate: String?,
+    @SerializedName("end_date") val endDate: String?,
+)
+
+data class DraftLanguageDto(val name: String, val level: String?)
+
+data class IncompleteItemDto(
+    val section: String,
+    @SerializedName("missing_fields") val missingFields: List<String>,
+)
+
+/** GET /cvs/{id}/analysis */
+data class CvAnalysisDto(
+    val id: String,
+    val status: String,
+    @SerializedName("error_code") val errorCode: String?,
+    val error: String?,
+    val applied: Boolean = false,
+    val engine: String?,
+    @SerializedName("extraction_method") val extractionMethod: String?,
+    @SerializedName("duration_ms") val durationMs: Long?,
+    val draft: ProfileDraftDto?,
+    @SerializedName("missing_sections") val missingSections: List<String> = emptyList(),
+    @SerializedName("incomplete_items") val incompleteItems: List<IncompleteItemDto> = emptyList(),
+)
+
+/** POST /cvs/{id}/apply-profile */
+data class ApplyProfileResultDto(
+    val profile: ProfileDto,
+    @SerializedName("missing_sections") val missingSections: List<String> = emptyList(),
+    @SerializedName("incomplete_items") val incompleteItems: List<IncompleteItemDto> = emptyList(),
+)
+
+data class AiQuotaDto(val used: Int, val limit: Int, val remaining: Int)
 
 data class OfferDto(
     val id: String,

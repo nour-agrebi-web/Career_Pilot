@@ -53,7 +53,35 @@ data class Cv(
     val status: String,
     val active: Boolean,
     val createdAt: String,
+    val errorCode: String? = null,
+    val error: String? = null,
+    /** Le profil déduit de ce CV a déjà été copié dans le profil. */
+    val applied: Boolean = false,
+) {
+    val isAnalyzing: Boolean get() = CvStatus.isRunning(status)
+}
+
+/** Résultat de l'analyse d'un CV, résumé pour l'écran « Mes CV ». */
+data class CvAnalysis(
+    val cvId: String,
+    val status: String,
+    val errorCode: String?,
+    val error: String?,
+    val applied: Boolean,
+    val engine: String?,
+    val domain: String?,
+    val skills: List<String>,
+    val experienceCount: Int,
+    val educationCount: Int,
+    val languageCount: Int,
+    /** Sections que l'analyse n'a pas su remplir : skills, experiences, educations. */
+    val missingSections: List<String>,
+    /** Éléments trouvés mais incomplets (sans date de début, sans niveau…), à compléter à la main. */
+    val incompleteCount: Int,
 )
+
+/** Après « Utiliser ce profil » : ce qu'il reste à compléter dans le profil. */
+data class ApplyProfileResult(val missingSections: List<String>, val incompleteCount: Int)
 
 data class Offer(
     val id: String,

@@ -11,7 +11,7 @@ import androidx.room.TypeConverters
         UserEntity::class, ProfileEntity::class, SkillEntity::class, ExperienceEntity::class,
         EducationEntity::class, LanguageEntity::class, PreferencesEntity::class, CvEntity::class, MatchEntity::class,
     ],
-    version = 1,
+    version = 2, // 2 : statut d'analyse du CV (erreur, profil appliqué)
     exportSchema = true,
 )
 @TypeConverters(Converters::class)

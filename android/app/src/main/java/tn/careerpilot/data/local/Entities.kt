@@ -66,6 +66,9 @@ data class CvEntity(
     val status: String,
     val active: Boolean,
     val createdAt: String,
+    val errorCode: String? = null,
+    val error: String? = null,
+    val applied: Boolean = false,
 )
 
 /** Correspondance et offre associée, à plat pour un affichage rapide du fil (< 2 s grâce au cache). */

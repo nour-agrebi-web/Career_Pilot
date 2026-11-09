@@ -91,12 +91,31 @@ Chaque utilisateur n'accède qu'à ses propres données (US-1.3.1). Les erreurs 
 | `GET / PUT / DELETE /preferences` | Préférences : types d'offres, localisations, télétravail, seuil (50 à 90), notifications |
 | `GET / POST /cvs` | Lister les versions ou importer un CV (PDF/DOCX, 5 Mo, 10 versions max, un seul actif) |
 | `GET / DELETE /cvs/{id}`, `PUT /cvs/{id}/activate` | Consulter, supprimer ou réactiver une version |
+| `GET /cvs/{id}/analysis` | Résultat de l'analyse : statut, profil déduit, sections vides, éléments à compléter |
+| `POST /cvs/{id}/apply-profile` | Copier le profil déduit dans le profil (à relire puis valider) |
+| `POST /cvs/{id}/analyze` | Relancer l'analyse (compte dans le quota IA) |
+| `GET /cvs/quota` | Opérations IA utilisées aujourd'hui (5 par jour) |
 | `GET /offers`, `GET /offers/{id}` | Offres actives (filtres `type` et `q`) |
 | `POST /matches/refresh` | Lancer un cycle de matching (profil validé requis) |
 | `GET /matches` | Offres recommandées triées par score (filtres `status`, `type`, `min_score` ; seuil des préférences par défaut) |
 | `GET / PUT / DELETE /matches/{id}` | Détail, changement de statut (`ACCEPTED` = sauvegardée) ou « Pas pour moi » |
 
 Le score (0 à 100) suit le cahier des charges : 40 similarité + 30 compétences clés + 15 niveau + 15 préférences, après les filtres éliminatoires. La similarité est pour l'instant un recouvrement de mots-clés (`app/modules/offers/matching.py`), à remplacer par les embeddings de l'Epic 4. `python -m seeds.seed_dev` ajoute 8 offres d'exemple.
+
+## Import et analyse du CV (Epic 2)
+
+1. `POST /cvs` vérifie le format (PDF ou DOCX) et la taille (5 Mo), puis enregistre le fichier **chiffré** (Fernet, clé `CV_ENCRYPTION_KEY`) dans `backend/storage/`. Le CV est créé avec le statut `UPLOADED`.
+2. Une tâche de fond passe le CV à `PROCESSING` et extrait le texte : pdfplumber pour les PDF, python-docx pour les DOCX, et OCR Tesseract si le PDF est un scan.
+3. Le nom, l'e-mail, le téléphone et l'adresse sont retirés du texte, puis le texte est structuré en profil (compétences, expériences, formations, langues, domaine, niveau) :
+   - avec `ANTHROPIC_API_KEY` dans le `.env` : par Claude (sortie JSON structurée) ;
+   - sans clé, ou si l'API ne répond pas : par l'analyse locale par règles (titres de sections et dates).
+   Dans les deux cas, tout élément absent du texte du CV est retiré : l'agent n'invente rien.
+4. Le CV passe à `PROCESSED` (profil déduit disponible) ou `ERROR` (`UNREADABLE` : fichier endommagé, `NO_TEXT` : scan illisible). L'application propose alors de réimporter un fichier ou de saisir le profil.
+5. Le candidat appuie sur « Utiliser ce profil » : le profil est rempli, repasse à « non validé », et le candidat le relit puis le valide.
+
+Quota : 5 opérations IA par jour et par utilisateur ; l'import d'un nouveau fichier en consomme une, un fichier déjà analysé est repris du cache sans en consommer.
+
+**OCR des CV scannés (facultatif)** : installer Tesseract pour Windows (github.com/UB-Mannheim/tesseract/wiki) en cochant les langues French et Arabic, puis, s'il n'est pas dans le PATH, ajouter dans `.env` : `TESSERACT_CMD=C:\Program Files\Tesseract-OCR\tesseract.exe`. Sans Tesseract, un CV scanné passe en erreur `NO_TEXT` et la saisie manuelle est proposée.
 
 ## Architecture de l'application Android (MVVM)
 

@@ -9,6 +9,12 @@ TEST_DB = settings.mongodb_test_db
 assert TEST_DB != settings.mongodb_db, "La base de test doit être différente de la base de dev."
 
 
+@pytest.fixture(autouse=True)
+def no_external_ai(monkeypatch):
+    # Les tests n'appellent jamais l'API Claude : analyse locale par règles.
+    monkeypatch.setattr(settings, "anthropic_api_key", "")
+
+
 @pytest.fixture()
 def db():
     mongo_client.drop_database(TEST_DB)

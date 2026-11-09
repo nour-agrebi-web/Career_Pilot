@@ -18,5 +18,8 @@ def create_indexes(db: Database) -> None:
     db.profiles.create_index("user_id", unique=True)
     db.preferences.create_index("user_id", unique=True)
     db.cvs.create_index([("user_id", 1), ("version", -1)])
+    db.cvs.create_index([("user_id", 1), ("sha256", 1)])  # cache : un même fichier n'est pas réanalysé
+    # Quota IA du jour (US-2.3.1) : un document par utilisateur et par jour, oublié après 2 jours.
+    db.ai_usage.create_index("expires_at", expireAfterSeconds=0)
     db.offers.create_index([("source", 1), ("source_id", 1)], unique=True)  # règle : (source, identifiant source)
     db.matches.create_index([("user_id", 1), ("offer_id", 1)], unique=True)

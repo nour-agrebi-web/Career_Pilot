@@ -1,5 +1,6 @@
 package tn.careerpilot.data.local
 
+import tn.careerpilot.data.remote.CvAnalysisDto
 import tn.careerpilot.data.remote.CvDto
 import tn.careerpilot.data.remote.EducationDto
 import tn.careerpilot.data.remote.ExperienceDto
@@ -9,6 +10,7 @@ import tn.careerpilot.data.remote.MatchDto
 import tn.careerpilot.data.remote.PreferencesDto
 import tn.careerpilot.data.remote.SkillDto
 import tn.careerpilot.domain.Cv
+import tn.careerpilot.domain.CvAnalysis
 import tn.careerpilot.domain.Education
 import tn.careerpilot.domain.Experience
 import tn.careerpilot.domain.Language
@@ -50,8 +52,24 @@ fun Preferences.toDto() = PreferencesDto(
     notificationsEnabled = notificationsEnabled,
 )
 
-fun CvDto.toEntity() = CvEntity(id, filename, size, version, status, active, createdAt)
-fun CvEntity.toDomain() = Cv(id, filename, size, version, status, active, createdAt)
+fun CvDto.toEntity() = CvEntity(id, filename, size, version, status, active, createdAt, errorCode, error, applied)
+fun CvEntity.toDomain() = Cv(id, filename, size, version, status, active, createdAt, errorCode, error, applied)
+
+fun CvAnalysisDto.toDomain() = CvAnalysis(
+    cvId = id,
+    status = status,
+    errorCode = errorCode,
+    error = error,
+    applied = applied,
+    engine = engine,
+    domain = draft?.domain,
+    skills = draft?.skills.orEmpty().map { it.name },
+    experienceCount = draft?.experiences.orEmpty().size,
+    educationCount = draft?.educations.orEmpty().size,
+    languageCount = draft?.languages.orEmpty().size,
+    missingSections = missingSections,
+    incompleteCount = incompleteItems.size,
+)
 
 fun MatchDto.toEntity() = MatchEntity(
     id = id,
