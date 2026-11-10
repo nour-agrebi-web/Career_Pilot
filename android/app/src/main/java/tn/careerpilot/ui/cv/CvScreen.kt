@@ -2,34 +2,26 @@ package tn.careerpilot.ui.cv
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.filled.Create
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -41,13 +33,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import tn.careerpilot.domain.Cv
 import tn.careerpilot.domain.CvAnalysis
 import tn.careerpilot.domain.CvStatus
-import tn.careerpilot.ui.common.EmptyState
-import tn.careerpilot.ui.common.ScreenHeader
+import tn.careerpilot.ui.common.AccentOutlineButton
+import tn.careerpilot.ui.common.BodyText
+import tn.careerpilot.ui.common.CpCard
+import tn.careerpilot.ui.common.CpDialog
+import tn.careerpilot.ui.common.DashedBox
+import tn.careerpilot.ui.common.LoadingBar
+import tn.careerpilot.ui.common.MutedText
+import tn.careerpilot.ui.common.PrimaryButton
+import tn.careerpilot.ui.common.SecondaryButton
+import tn.careerpilot.ui.common.SoftButton
 import tn.careerpilot.ui.common.Tag
+import tn.careerpilot.ui.common.TagStyle
 import tn.careerpilot.ui.common.UiMessageEffect
+import tn.careerpilot.ui.theme.CareerPilotTheme
+import tn.careerpilot.ui.theme.DmSans
 import java.util.Locale
 
 private val CV_MIME_TYPES = arrayOf(
@@ -55,14 +59,18 @@ private val CV_MIME_TYPES = arrayOf(
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 )
 
-/** Mes CV : import (PDF/DOCX, 5 Mo), suivi de l'analyse, profil déduit, versions, activation et suppression. */
+/**
+ * Carte « Mes CV » de l'onglet Profil et CV (.cv-section de la maquette) :
+ * import (PDF/DOCX, 5 Mo), suivi de l'analyse, profil déduit, versions, activation et suppression.
+ */
 @Composable
-fun CvScreen(viewModel: CvViewModel, onOpenProfile: () -> Unit) {
+fun CvSection(viewModel: CvViewModel, onOpenProfile: () -> Unit, modifier: Modifier = Modifier) {
     val cvs by viewModel.cvs.observeAsState(emptyList())
     val state by viewModel.uiState.observeAsState()
     val analysis by viewModel.analysis.observeAsState()
     val openProfile by viewModel.openProfile.observeAsState(false)
     var toDelete by remember { mutableStateOf<Cv?>(null) }
+    val c = CareerPilotTheme.colors
     UiMessageEffect(state, viewModel::messageShown)
 
     LaunchedEffect(openProfile) {
@@ -77,76 +85,111 @@ fun CvScreen(viewModel: CvViewModel, onOpenProfile: () -> Unit) {
     }
     val pickFile = { picker.launch(CV_MIME_TYPES) }
 
-    Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize()) {
-            ScreenHeader("Mes CV", "Un seul CV actif · 10 versions conservées au maximum")
-            if (state?.loading == true && analysis?.let { CvStatus.isRunning(it.status) } != true) {
-                LinearProgressIndicator(Modifier.fillMaxWidth())
-            }
-            if (cvs.isEmpty() && state?.loading != true) {
-                EmptyState("Aucun CV", "Importez votre CV (PDF ou DOCX, 5 Mo maximum) : l'agent en déduira votre profil.")
-            }
-            LazyColumn(contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 96.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                analysis?.let { current ->
-                    item(key = "analysis") {
-                        AnalysisCard(
-                            analysis = current,
-                            onApply = { viewModel.applyProfile(current) },
-                            onReimport = pickFile,
-                            onRetry = { viewModel.reanalyze(current) },
-                            onManualEntry = viewModel::enterProfileManually,
-                            onOpenProfile = onOpenProfile,
-                        )
-                    }
-                }
-                items(cvs, key = { it.id }) { cv -> CvCard(cv, onActivate = { viewModel.activate(cv) }, onDelete = { toDelete = cv }) }
+    CpCard(modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Mes CV",
+                color = c.title,
+                fontFamily = DmSans,
+                fontWeight = FontWeight.Bold,
+                fontSize = 24.sp,
+                letterSpacing = (-0.5).sp,
+                modifier = Modifier.weight(1f),
+            )
+            // .cv-icon
+            Box(Modifier.size(36.dp).background(c.accentSoft, RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.Create, contentDescription = null, tint = c.accent, modifier = Modifier.size(18.dp))
             }
         }
-        ExtendedFloatingActionButton(
-            onClick = pickFile,
-            icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-            text = { Text("Importer un CV") },
-            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+        MutedText(
+            "Importez vos CV au format PDF ou DOCX (5 Mo maximum). Un seul CV actif, 10 versions conservées.",
+            Modifier.padding(top = 8.dp, bottom = 12.dp),
         )
+        AccentOutlineButton("Importer un CV", pickFile, icon = Icons.Filled.Add)
+        if (state?.loading == true && analysis?.let { CvStatus.isRunning(it.status) } != true) {
+            LoadingBar(Modifier.padding(top = 10.dp))
+        }
+
+        analysis?.let { current ->
+            AnalysisCard(
+                analysis = current,
+                onApply = { viewModel.applyProfile(current) },
+                onReimport = pickFile,
+                onRetry = { viewModel.reanalyze(current) },
+                onManualEntry = viewModel::enterProfileManually,
+                onOpenProfile = onOpenProfile,
+                modifier = Modifier.padding(top = 12.dp),
+            )
+        }
+
+        Text(
+            "Mes CV",
+            color = c.title,
+            fontFamily = DmSans,
+            fontWeight = FontWeight.Bold,
+            fontSize = 13.sp,
+            modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
+        )
+        if (cvs.isEmpty()) {
+            DashedBox {
+                MutedText("Aucun CV importé", Modifier.padding(bottom = 10.dp), size = 13)
+                SoftButton("Importer un CV", pickFile)
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                cvs.forEach { cv -> CvItem(cv, onActivate = { viewModel.activate(cv) }, onDelete = { toDelete = cv }) }
+            }
+        }
     }
 
     toDelete?.let { cv ->
-        AlertDialog(
-            onDismissRequest = { toDelete = null },
-            title = { Text("Supprimer ce CV ?") },
-            text = { Text("La version ${cv.version} (${cv.filename}) sera supprimée définitivement.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.delete(cv)
-                    toDelete = null
-                }) { Text("Supprimer") }
+        CpDialog(
+            title = "Supprimer ce CV ?",
+            onDismiss = { toDelete = null },
+            confirmText = "Supprimer",
+            destructive = true,
+            onConfirm = {
+                viewModel.delete(cv)
+                toDelete = null
             },
-            dismissButton = { TextButton(onClick = { toDelete = null }) { Text("Annuler") } },
+        ) {
+            BodyText("La version ${cv.version} (${cv.filename}) sera supprimée définitivement.", size = 13)
+        }
+    }
+}
+
+/** Une version de CV (.cv-item) : nom du fichier, date, statut et actions. */
+@Composable
+private fun CvItem(cv: Cv, onActivate: () -> Unit, onDelete: () -> Unit) {
+    val c = CareerPilotTheme.colors
+    CpCard(padding = PaddingValues(11.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                cv.filename,
+                color = c.title,
+                fontFamily = DmSans,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(8.dp))
+            if (cv.active) Tag("Actif", TagStyle.ACCENT) else Tag("Archivé")
+        }
+        MutedText(
+            "Version ${cv.version} · ${formatSize(cv.size)} · importé le ${cv.createdAt.take(10)} · ${statusLabel(cv.status)}",
+            Modifier.padding(top = 4.dp, bottom = 9.dp),
+            size = 11,
         )
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (!cv.active) SecondaryButton("Activer", onActivate)
+            SecondaryButton("Supprimer", onDelete, color = c.error)
+        }
     }
 }
 
 @Composable
-private fun CvCard(cv: Cv, onActivate: () -> Unit, onDelete: () -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Version ${cv.version}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.width(8.dp))
-                    if (cv.active) Tag("Actif") else Tag("Archivé", MaterialTheme.colorScheme.surfaceVariant)
-                }
-                Text(cv.filename, style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    "${formatSize(cv.size)} · importé le ${cv.createdAt.take(10)} · ${statusLabel(cv.status)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            if (!cv.active) TextButton(onClick = onActivate) { Text("Activer") }
-            IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = "Supprimer") }
-        }
-    }
+private fun AnalysisTitle(color: androidx.compose.ui.graphics.Color, text: String) {
+    Text(text, color = color, fontFamily = DmSans, fontWeight = FontWeight.Bold, fontSize = 13.sp)
 }
 
 private fun formatSize(bytes: Long): String =
@@ -156,6 +199,7 @@ private fun formatSize(bytes: Long): String =
 private fun statusLabel(status: String) = CvStatus.label(status)
 
 /** Carte du CV actif : analyse en cours (US-2.1.1), profil déduit (US-2.2.1), erreur (US-2.2.2, US-2.2.3). */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AnalysisCard(
     analysis: CvAnalysis,
@@ -164,61 +208,67 @@ private fun AnalysisCard(
     onRetry: () -> Unit,
     onManualEntry: () -> Unit,
     onOpenProfile: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val colors = when (analysis.status) {
-        CvStatus.ERROR -> CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
-        else -> CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-    }
-    Card(Modifier.fillMaxWidth(), colors = colors) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            when {
-                CvStatus.isRunning(analysis.status) -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(Modifier.padding(end = 12.dp))
-                    Column {
-                        Text("Analyse de votre CV en cours…", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                        Text("L'agent lit votre CV et en déduit votre profil (moins de 30 secondes).", style = MaterialTheme.typography.bodySmall)
-                    }
+    val c = CareerPilotTheme.colors
+    val isError = analysis.status == CvStatus.ERROR
+    CpCard(
+        modifier,
+        padding = PaddingValues(13.dp),
+        background = if (isError) c.warningBackground else c.accentSoft,
+        borderColor = if (isError) c.warningText.copy(alpha = 0.35f) else c.accent.copy(alpha = 0.35f),
+    ) {
+        val titleColor = if (isError) c.warningText else c.title
+        when {
+            CvStatus.isRunning(analysis.status) -> Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(Modifier.size(28.dp), color = c.accent, trackColor = c.track, strokeWidth = 3.dp)
+                Column(Modifier.padding(start = 12.dp)) {
+                    AnalysisTitle(titleColor, "Analyse de votre CV en cours…")
+                    MutedText("L'agent lit votre CV et en déduit votre profil (moins de 30 secondes).")
                 }
+            }
 
-                analysis.status == CvStatus.ERROR -> {
-                    Text("Impossible d'analyser ce CV", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Text(CvStatus.errorMessage(analysis.errorCode, analysis.error), style = MaterialTheme.typography.bodyMedium)
-                    Text("Vous pouvez importer un autre fichier ou saisir votre profil vous-même.", style = MaterialTheme.typography.bodySmall)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = onReimport) { Text("Réimporter") }
-                        OutlinedButton(onClick = onManualEntry) { Text("Saisir mon profil") }
-                    }
+            isError -> {
+                AnalysisTitle(titleColor, "Impossible d'analyser ce CV")
+                BodyText(CvStatus.errorMessage(analysis.errorCode, analysis.error), Modifier.padding(top = 6.dp))
+                MutedText("Vous pouvez importer un autre fichier ou saisir votre profil vous-même.", Modifier.padding(top = 4.dp))
+                FlowRow(
+                    Modifier.padding(top = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    PrimaryButton("Réimporter", onReimport)
+                    SecondaryButton("Saisir mon profil", onManualEntry)
                     if (analysis.errorCode != CvStatus.UNREADABLE && analysis.errorCode != CvStatus.NO_TEXT) {
-                        TextButton(onClick = onRetry) { Text("Relancer l'analyse") }
+                        SecondaryButton("Relancer l'analyse", onRetry)
                     }
                 }
+            }
 
-                analysis.applied -> {
-                    Text("Profil importé depuis ce CV", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Text("Relisez-le et validez-le pour démarrer la veille des offres.", style = MaterialTheme.typography.bodySmall)
-                    OutlinedButton(onClick = onOpenProfile) { Text("Voir mon profil") }
-                }
+            analysis.applied -> {
+                AnalysisTitle(titleColor, "Profil importé depuis ce CV")
+                MutedText("Relisez-le et validez-le pour démarrer la veille des offres.", Modifier.padding(top = 4.dp, bottom = 10.dp))
+                SoftButton("Voir mon profil", onOpenProfile)
+            }
 
-                else -> {
-                    Text("Profil déduit de votre CV", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    analysis.domain?.let { Text("Domaine : $it", style = MaterialTheme.typography.bodyMedium) }
-                    Text(
-                        "${analysis.skills.size} compétences · ${analysis.experienceCount} expériences · " +
-                            "${analysis.educationCount} formations · ${analysis.languageCount} langues",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    if (analysis.skills.isNotEmpty()) {
-                        Text(analysis.skills.take(8).joinToString(" · "), style = MaterialTheme.typography.bodySmall)
-                    }
-                    CvStatus.missingLabel(analysis.missingSections)?.let {
-                        Text("Sections non trouvées : $it. Vous pourrez les compléter.", style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error)
-                    }
-                    if (analysis.incompleteCount > 0) {
-                        Text("${analysis.incompleteCount} élément(s) incomplet(s) à compléter à la main.", style = MaterialTheme.typography.bodySmall)
-                    }
-                    Button(onClick = onApply) { Text("Utiliser ce profil") }
+            else -> {
+                AnalysisTitle(titleColor, "Profil déduit de votre CV")
+                analysis.domain?.let { BodyText("Domaine : $it", Modifier.padding(top = 6.dp)) }
+                BodyText(
+                    "${analysis.skills.size} compétences · ${analysis.experienceCount} expériences · " +
+                        "${analysis.educationCount} formations · ${analysis.languageCount} langues",
+                    Modifier.padding(top = 4.dp),
+                )
+                if (analysis.skills.isNotEmpty()) {
+                    MutedText(analysis.skills.take(8).joinToString(" · "), Modifier.padding(top = 4.dp))
                 }
+                CvStatus.missingLabel(analysis.missingSections)?.let {
+                    BodyText("Sections non trouvées : $it. Vous pourrez les compléter.", Modifier.padding(top = 4.dp), color = c.warningText)
+                }
+                if (analysis.incompleteCount > 0) {
+                    MutedText("${analysis.incompleteCount} élément(s) incomplet(s) à compléter à la main.", Modifier.padding(top = 4.dp))
+                }
+                PrimaryButton("Utiliser ce profil", onApply, Modifier.fillMaxWidth().padding(top = 10.dp))
             }
         }
     }
