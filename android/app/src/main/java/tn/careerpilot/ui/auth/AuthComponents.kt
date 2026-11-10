@@ -309,10 +309,17 @@ fun rememberLockSecondsLeft(form: FormState): Int {
     return secondsLeft
 }
 
+/** Durée au format m:ss (65 → "1:05"), pour le compte à rebours du blocage. */
+fun formatCountdown(seconds: Int): String = "%d:%02d".format(seconds / 60, seconds % 60)
+
 /** Message affiché sous les champs : compte à rebours pendant un blocage, sinon l'erreur éventuelle. */
 fun authMessage(form: FormState, lockSecondsLeft: Int): String? =
     if (lockSecondsLeft > 0) {
-        "Trop de tentatives. Réessayez dans %d:%02d.".format(lockSecondsLeft / 60, lockSecondsLeft % 60)
+        "Trop de tentatives. Réessayez dans ${formatCountdown(lockSecondsLeft)}."
     } else {
         form.error
     }
+
+/** Texte du bouton de connexion : le compte à rebours remplace « Se connecter » pendant un blocage. */
+fun loginButtonText(lockSecondsLeft: Int): String =
+    if (lockSecondsLeft > 0) "Bloqué · ${formatCountdown(lockSecondsLeft)}" else "Se connecter"

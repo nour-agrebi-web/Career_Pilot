@@ -24,7 +24,7 @@ fun LoginScreen(
         PasswordField(password, { password = it })
         ErrorText(authMessage(form, lockSecondsLeft)) // US-1.2.1 : message unique, sans dire quel champ est faux
         SubmitButton(
-            "Se connecter",
+            loginButtonText(lockSecondsLeft), // désactivé avec un compte à rebours pendant un blocage
             loading = form.loading,
             enabled = email.isNotBlank() && password.isNotEmpty() && lockSecondsLeft == 0,
         ) { onLogin(email, password) }

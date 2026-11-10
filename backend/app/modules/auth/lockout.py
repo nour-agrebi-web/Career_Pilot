@@ -1,19 +1,27 @@
 """Blocage temporaire après trop d'échecs de connexion, compté par adresse e-mail.
 
-Les 3 premiers échecs sont normaux. Aux 4e et 5e échecs, l'e-mail est bloqué 3 minutes ;
-à partir du 6e, 15 minutes. Une connexion réussie remet le compteur à zéro.
+Tous les 3 échecs, l'e-mail est bloqué : 1 minute la 1re fois, 3 minutes la 2e,
+puis 5 minutes la 3e fois et les suivantes. Pendant un blocage, les tentatives sont
+refusées sans être comptées. Une connexion réussie remet le compteur à zéro.
 """
 import math
 from datetime import datetime, timedelta, timezone
 from pymongo import ReturnDocument
 from pymongo.database import Database
 
-# (nombre d'échecs atteint, durée du blocage), du palier le plus haut au plus bas.
-LOCK_STEPS = ((6, timedelta(minutes=15)), (4, timedelta(minutes=3)))
+# Nombre d'échecs qui déclenche un blocage.
+MAX_FAILURES = 3
+# Durée du 1er, du 2e et du 3e blocage ; la dernière vaut aussi pour les suivants.
+LOCK_DURATIONS = (timedelta(minutes=1), timedelta(minutes=3), timedelta(minutes=5))
 
 
 def now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def lock_duration(lock_number: int) -> timedelta:
+    """Durée du n-ième blocage (n >= 1)."""
+    return LOCK_DURATIONS[min(lock_number, len(LOCK_DURATIONS)) - 1]
 
 
 def seconds_left(db: Database, email: str) -> int:
@@ -33,9 +41,9 @@ def record_failure(db: Database, email: str) -> int:
         upsert=True,
         return_document=ReturnDocument.AFTER,
     )
-    duration = next((d for threshold, d in LOCK_STEPS if doc["failures"] >= threshold), None)
-    if duration is None:
+    if doc["failures"] % MAX_FAILURES:
         return 0
+    duration = lock_duration(doc["failures"] // MAX_FAILURES)
     db.login_attempts.update_one({"_id": email}, {"$set": {"locked_until": now() + duration}})
     return int(duration.total_seconds())
 

@@ -56,7 +56,7 @@ Si l'app affiche « Impossible de joindre le serveur » :
 - sur un vrai téléphone, 10.0.2.2 n'existe pas : dans `RetrofitInstance.kt`, commenter la ligne de l'émulateur et décommenter `LOCAL_IP` (IPv4 du PC donnée par `ipconfig`) et le second `BASE_URL` ; PC et téléphone sur le même Wi-Fi ;
 - en dernier recours (émulateur ou téléphone USB) : `adb reverse tcp:8000 tcp:8000` et `BASE_URL = "http://127.0.0.1:$API_PORT/"` dans `RetrofitInstance.kt`, à relancer après chaque redémarrage de l'appareil.
 
-Après 3 échecs de connexion, l'e-mail est bloqué 3 min au 4e échec et au 5e, puis 15 min à partir du 6e ; l'app affiche le compte à rebours. Une connexion réussie remet le compteur à zéro. Pour débloquer un compte en dev, supprimer son document dans la collection `login_attempts`.
+Après 3 échecs de connexion, l'e-mail est bloqué 1 min ; 3 nouveaux échecs le bloquent 3 min, puis 5 min pour le 3e blocage et les suivants. Pendant le blocage, le bouton « Se connecter » est désactivé et l'app affiche le compte à rebours. Une connexion réussie remet le compteur à zéro. Pour débloquer un compte en dev, supprimer son document dans la collection `login_attempts`.
 
 ```text
 android/app/src/main/java/tn/careerpilot/
