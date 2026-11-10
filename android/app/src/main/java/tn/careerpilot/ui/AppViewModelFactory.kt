@@ -25,7 +25,7 @@ val AppViewModelFactory = viewModelFactory {
     initializer { MatchesViewModel(container.matchRepository, container.preferencesRepository) }
     initializer { StatsViewModel(container.matchRepository) }
     initializer { ProfileViewModel(container.profileRepository) }
-    initializer { CvViewModel(container.cvRepository) }
+    initializer { CvViewModel(container.cvRepository, container.profileRepository) }
     initializer { PreferencesViewModel(container.preferencesRepository) }
 }
 

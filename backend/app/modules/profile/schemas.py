@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, model_validator
 #   educations: [{id, degree, institution, start_date, end_date}], languages: [{id, name, level}] }
 
 Level = Literal["stage", "junior", "confirme"]
+LEVELS_ALLOWED = ("stage", "junior", "confirme")
 LanguageLevel = Literal["A1", "A2", "B1", "B2", "C1", "C2", "natif"]
 
 

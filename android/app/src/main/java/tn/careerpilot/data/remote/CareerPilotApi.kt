@@ -80,6 +80,18 @@ interface CareerPilotApi {
     @POST("cvs")
     suspend fun uploadCv(@Part file: MultipartBody.Part): Response<CvDto>
 
+    @GET("cvs/{id}/analysis")
+    suspend fun getCvAnalysis(@Path("id") id: String): Response<CvAnalysisDto>
+
+    @POST("cvs/{id}/analyze")
+    suspend fun analyzeCv(@Path("id") id: String): Response<CvDto>
+
+    @POST("cvs/{id}/apply-profile")
+    suspend fun applyCvProfile(@Path("id") id: String): Response<ApplyProfileResultDto>
+
+    @GET("cvs/quota")
+    suspend fun getAiQuota(): Response<AiQuotaDto>
+
     @PUT("cvs/{id}/activate")
     suspend fun activateCv(@Path("id") id: String): Response<CvDto>
 
