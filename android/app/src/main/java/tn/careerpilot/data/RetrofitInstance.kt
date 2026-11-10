@@ -16,9 +16,13 @@ const val BASE_URL = "http://10.0.2.2:$API_PORT/"
 // const val BASE_URL = "http://$LOCAL_IP:$API_PORT/"
 
 object RetrofitInstance {
-    fun createApi(baseUrl: String, tokens: TokenStore, onSessionExpired: () -> Unit): ApiService {
+    /**
+     * Retrofit partagé par toutes les interfaces d'API : chaque requête reçoit le jeton d'accès,
+     * et un 401 déclenche le rafraîchissement automatique du jeton.
+     */
+    fun createRetrofit(baseUrl: String, tokens: TokenStore, onSessionExpired: () -> Unit): Retrofit {
         // Client sans authenticator pour le refresh, sinon un 401 sur /auth/refresh bouclerait.
-        val plainApi = retrofit(baseUrl, OkHttpClient.Builder().timeouts().build())
+        val plainApi = authApi(retrofit(baseUrl, OkHttpClient.Builder().timeouts().build()))
 
         val client = OkHttpClient.Builder()
             .timeouts()
@@ -28,13 +32,17 @@ object RetrofitInstance {
         return retrofit(baseUrl, client)
     }
 
-    private fun retrofit(baseUrl: String, client: OkHttpClient): ApiService =
+    fun createApi(baseUrl: String, tokens: TokenStore, onSessionExpired: () -> Unit): ApiService =
+        authApi(createRetrofit(baseUrl, tokens, onSessionExpired))
+
+    fun authApi(retrofit: Retrofit): ApiService = retrofit.create(ApiService::class.java)
+
+    private fun retrofit(baseUrl: String, client: OkHttpClient): Retrofit =
         Retrofit.Builder()
             .baseUrl(baseUrl)
             .client(client)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
-            .create(ApiService::class.java)
 
     private fun OkHttpClient.Builder.timeouts() = apply {
         connectTimeout(15, TimeUnit.SECONDS)

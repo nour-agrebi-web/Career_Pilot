@@ -8,7 +8,7 @@ Projet d'Intégration · ISET Radès · 2026/2027 · Mohamed Amine Hayouni, Nour
 
 ```text
 backend/   API FastAPI (Python) + MongoDB, monolithe modulaire : auth, cv, profile, offers, notifications, admin
-android/   Application Android native : Kotlin, Jetpack Compose, Retrofit (à ouvrir dans Android Studio)
+android/   Application Android native : Kotlin, MVVM, Jetpack Compose, Retrofit, Room (à ouvrir dans Android Studio)
 .github/   Intégration continue : tests backend + tests et compilation de l'app Android
 ```
 
@@ -77,6 +77,42 @@ android/app/src/main/java/tn/careerpilot/
 | `POST /auth/logout` | Révoque le refresh token |
 | `GET /users/me` | Utilisateur connecté |
 | `GET /admin/stats` | Réservé aux administrateurs |
+
+## API métier (jeton d'accès obligatoire)
+
+Chaque utilisateur n'accède qu'à ses propres données (US-1.3.1). Les erreurs renvoient `{"detail": "message en français"}`.
+
+| Route | Rôle |
+| --- | --- |
+| `GET / PUT / DELETE /profile` | Lire, modifier (domaine, niveau) ou réinitialiser le profil |
+| `POST /profile/validate` | Valider le profil (compétences + formation ou expérience obligatoires) |
+| `GET / POST /profile/{section}` | Lister ou ajouter : `skills`, `experiences`, `educations`, `languages` |
+| `PUT / DELETE /profile/{section}/{id}` | Modifier ou supprimer un élément du profil |
+| `GET / PUT / DELETE /preferences` | Préférences : types d'offres, localisations, télétravail, seuil (50 à 90), notifications |
+| `GET / POST /cvs` | Lister les versions ou importer un CV (PDF/DOCX, 5 Mo, 10 versions max, un seul actif) |
+| `GET / DELETE /cvs/{id}`, `PUT /cvs/{id}/activate` | Consulter, supprimer ou réactiver une version |
+| `GET /offers`, `GET /offers/{id}` | Offres actives (filtres `type` et `q`) |
+| `POST /matches/refresh` | Lancer un cycle de matching (profil validé requis) |
+| `GET /matches` | Offres recommandées triées par score (filtres `status`, `type`, `min_score` ; seuil des préférences par défaut) |
+| `GET / PUT / DELETE /matches/{id}` | Détail, changement de statut (`ACCEPTED` = sauvegardée) ou « Pas pour moi » |
+
+Le score (0 à 100) suit le cahier des charges : 40 similarité + 30 compétences clés + 15 niveau + 15 préférences, après les filtres éliminatoires. La similarité est pour l'instant un recouvrement de mots-clés (`app/modules/offers/matching.py`), à remplacer par les embeddings de l'Epic 4. `python -m seeds.seed_dev` ajoute 8 offres d'exemple.
+
+## Architecture de l'application Android (MVVM)
+
+```text
+ui/            Vues Compose + ViewModels (état exposé en LiveData, appels dans viewModelScope)
+  AppViewModelFactory   une factory qui injecte les repositories dans chaque ViewModel
+  auth/ matches/ profile/ cv/ preferences/ stats/ main/
+data/
+  AuthRepository        connexion, inscription, session (jetons chiffrés + User dans Room)
+  repository/           ProfileRepository, PreferencesRepository, CvRepository, MatchRepository
+  remote/               Retrofit (CareerPilotApi, DTO, safeApiCall : try/catch + response.isSuccessful)
+  local/                Room (AppDatabase, entités, DAO) : cache qui alimente les écrans
+domain/        Modèles métier et règles testées sans Android (complétude du profil, filtres, statistiques, validations)
+```
+
+Les écrans observent le cache Room. Chaque action passe par l'API, puis le repository met à jour Room, et l'écran se rafraîchit tout seul.
 
 ## Workflow Git
 
