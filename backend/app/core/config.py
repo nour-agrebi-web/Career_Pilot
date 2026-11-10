@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_minutes: int = 15
     refresh_token_days: int = 7
+    # Délai max pour joindre MongoDB avant de renvoyer une erreur 503 (ms).
+    mongodb_timeout_ms: int = 5000
     # Dossier des CV importés (ignoré par Git : données personnelles).
     storage_dir: str = "storage"
     # Clé Fernet de chiffrement des CV au repos. Vide : dérivée de JWT_SECRET (pratique en dev,

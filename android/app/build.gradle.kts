@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -15,6 +17,17 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
+
+        // Adresse de l'API pour un VRAI TÉLÉPHONE, lue dans android/local.properties (non versionné) :
+        //   careerpilot.apiHost=192.168.1.24
+        // Sur l'émulateur, l'app utilise toujours 10.0.2.2 (détecté automatiquement).
+        val localProps = Properties().apply {
+            rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+        }
+        val apiHost = localProps.getProperty("careerpilot.apiHost")?.trim().orEmpty()
+        val apiPort = localProps.getProperty("careerpilot.apiPort")?.trim()?.ifEmpty { null } ?: "8000"
+        buildConfigField("String", "API_DEVICE_HOST", "\"$apiHost\"")
+        buildConfigField("int", "API_PORT", apiPort)
     }
 
     buildTypes {
@@ -29,6 +42,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     testOptions {
         // android.util.Log renvoie une valeur par défaut dans les tests JVM au lieu de lever une exception.

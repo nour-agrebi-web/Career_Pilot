@@ -1,19 +1,38 @@
 package tn.careerpilot.data
 
+import android.os.Build
 import okhttp3.OkHttpClient
+import tn.careerpilot.BuildConfig
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
-// Configuration du port de l'API FastAPI locale (python -m app)
-const val API_PORT = 8000
+// Adresse de l'API FastAPI locale (python -m app), choisie au lancement de l'app :
+// - sur l'ÉMULATEUR : http://10.0.2.2:8000/ (10.0.2.2 = le PC hôte), rien à configurer ;
+// - sur un VRAI TÉLÉPHONE : l'IPv4 du PC (ipconfig), à mettre dans android/local.properties :
+//       careerpilot.apiHost=192.168.1.24
+//   puis Build > Rebuild Project et relancer l'app. Le PC et le téléphone doivent être sur le même Wi-Fi.
+// - avec `adb reverse tcp:8000 tcp:8000` (USB) : careerpilot.apiHost=127.0.0.1
+const val API_PORT = BuildConfig.API_PORT
+const val EMULATOR_HOST = "10.0.2.2"
 
-// --- CHOISIR L'ADRESSE EN FONCTION DE VOTRE CIBLE ---
-// 1. Pour l'ÉMULATEUR ANDROID (10.0.2.2 = le PC hôte)
-const val BASE_URL = "http://10.0.2.2:$API_PORT/"
-// 2. Pour un APPAREIL PHYSIQUE (même Wi-Fi que le PC ; IPv4 donnée par ipconfig)
-// const val LOCAL_IP = "192.168.1.5"
-// const val BASE_URL = "http://$LOCAL_IP:$API_PORT/"
+val BASE_URL: String = "http://${apiHost()}:$API_PORT/"
+
+private fun apiHost(): String = when {
+    isEmulator() -> EMULATOR_HOST
+    BuildConfig.API_DEVICE_HOST.isNotBlank() -> BuildConfig.API_DEVICE_HOST
+    else -> EMULATOR_HOST // non configuré : le message d'erreur affichera 10.0.2.2
+}
+
+/** Détection classique de l'émulateur Android Studio (images « goldfish » / « ranchu »). */
+private fun isEmulator(): Boolean {
+    val fingerprint = Build.FINGERPRINT.orEmpty()
+    val hardware = Build.HARDWARE.orEmpty()
+    val product = Build.PRODUCT.orEmpty()
+    return fingerprint.startsWith("generic") || fingerprint.contains("emulator") ||
+        hardware == "goldfish" || hardware == "ranchu" ||
+        product.contains("sdk_gphone") || product.contains("emulator") || product.contains("sdk")
+}
 
 object RetrofitInstance {
     /**
