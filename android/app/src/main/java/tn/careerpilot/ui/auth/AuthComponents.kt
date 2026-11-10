@@ -301,6 +301,9 @@ fun AuthSwitchLink(prompt: String, action: String, onClick: () -> Unit) {
 @Composable
 fun rememberLockSecondsLeft(form: FormState): Int {
     val secondsLeft by produceState(form.lockSecondsLeft(), form.lockedUntil) {
+        // produceState garde sa valeur d'une clé à l'autre : sans cette ligne, elle resterait à 0
+        // quand un blocage arrive (lockedUntil passe de null à une date) et la boucle ne tournerait pas.
+        value = form.lockSecondsLeft()
         while (value > 0) {
             delay(250)
             value = form.lockSecondsLeft()
