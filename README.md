@@ -49,12 +49,23 @@ Créer un administrateur : s'inscrire normalement, puis dans Compass (ou mongosh
 2. Dans Android Studio : **File > Open** puis choisir le dossier `android/` (pas la racine du dépôt).
 3. Attendre la fin de la synchronisation Gradle, puis lancer `app` sur un émulateur.
 
-L'émulateur joint l'API du PC via `http://10.0.2.2:8000/` (réglé dans `android/app/src/main/java/tn/careerpilot/data/RetrofitInstance.kt`). Pour vérifier, ouvrir `http://10.0.2.2:8000/docs` dans le Chrome de l'émulateur.
+L'émulateur joint l'API du PC via `http://10.0.2.2:8000/`, détecté automatiquement : rien à configurer. Pour vérifier, ouvrir `http://10.0.2.2:8000/docs` dans le Chrome de l'émulateur.
+
+Sur un **vrai téléphone** (même Wi-Fi que le PC), ajouter l'IPv4 du PC (donnée par `ipconfig`) dans `android/local.properties`, fichier non versionné, propre à chaque PC :
+
+```properties
+careerpilot.apiHost=192.168.1.24
+# careerpilot.apiPort=8000   (facultatif)
+```
+
+Puis **Build > Rebuild Project** et relancer l'app. Le même APK continue de fonctionner sur l'émulateur. Pour vérifier depuis le téléphone, ouvrir `http://192.168.1.24:8000/docs` dans son navigateur.
 
 Si l'app affiche « Impossible de joindre le serveur » :
-- vérifier que `python -m app` tourne toujours ;
-- sur un vrai téléphone, 10.0.2.2 n'existe pas : dans `RetrofitInstance.kt`, commenter la ligne de l'émulateur et décommenter `LOCAL_IP` (IPv4 du PC donnée par `ipconfig`) et le second `BASE_URL` ; PC et téléphone sur le même Wi-Fi ;
-- en dernier recours (émulateur ou téléphone USB) : `adb reverse tcp:8000 tcp:8000` et `BASE_URL = "http://127.0.0.1:$API_PORT/"` dans `RetrofitInstance.kt`, à relancer après chaque redémarrage de l'appareil.
+- vérifier que `python -m app` tourne toujours et que la console n'affiche pas d'erreur (après un `git pull`, relancer `pip install -r requirements.txt`) ;
+- ouvrir `http://localhost:8000/health` sur le PC : `{"status":"ok","mongodb":"ok"}` attendu ; une erreur 503 signifie que MongoDB est arrêté (démarrer le service MongoDB) ;
+- si l'adresse affichée est `10.0.2.2` sur un vrai téléphone, `careerpilot.apiHost` n'est pas lu : vérifier `android/local.properties`, puis Rebuild et réinstaller l'app ;
+- vérifier que `http://<IP du PC>:8000/docs` s'ouvre dans le navigateur du téléphone (sinon : pare-feu, Wi-Fi invité ou isolation des clients sur la box) ;
+- en dernier recours (téléphone en USB) : `adb reverse tcp:8000 tcp:8000` et `careerpilot.apiHost=127.0.0.1`, à relancer après chaque redémarrage de l'appareil.
 
 Après 3 échecs de connexion, l'e-mail est bloqué 1 min ; 3 nouveaux échecs le bloquent 3 min, puis 5 min pour le 3e blocage et les suivants. Pendant le blocage, le bouton « Se connecter » est désactivé et l'app affiche le compte à rebours. Une connexion réussie remet le compteur à zéro. Pour débloquer un compte en dev, supprimer son document dans la collection `login_attempts`.
 
