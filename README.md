@@ -85,7 +85,8 @@ Chaque utilisateur n'accède qu'à ses propres données (US-1.3.1). Les erreurs 
 | Route | Rôle |
 | --- | --- |
 | `GET / PUT / DELETE /profile` | Lire, modifier (domaine, niveau) ou réinitialiser le profil |
-| `POST /profile/validate` | Valider le profil (compétences + formation ou expérience obligatoires) |
+| `POST /profile/validate` | Valider le profil (compétences + formation ou expérience obligatoires), puis le vectoriser dans Qdrant |
+| `GET /profile/vector-index` | État de la vectorisation du profil : `INDEXING`, `INDEXED` ou `ERROR` |
 | `GET / POST /profile/{section}` | Lister ou ajouter : `skills`, `experiences`, `educations`, `languages` |
 | `PUT / DELETE /profile/{section}/{id}` | Modifier ou supprimer un élément du profil |
 | `GET / PUT / DELETE /preferences` | Préférences : types d'offres, localisations, télétravail, seuil (50 à 90), notifications |
@@ -107,11 +108,14 @@ Le score (0 à 100) suit le cahier des charges : 40 similarité + 30 compétence
 1. `POST /cvs` vérifie le format (PDF ou DOCX) et la taille (5 Mo), puis enregistre le fichier **chiffré** (Fernet, clé `CV_ENCRYPTION_KEY`) dans `backend/storage/`. Le CV est créé avec le statut `UPLOADED`.
 2. Une tâche de fond passe le CV à `PROCESSING` et extrait le texte : pdfplumber pour les PDF, python-docx pour les DOCX, et OCR Tesseract si le PDF est un scan.
 3. Le nom, l'e-mail, le téléphone et l'adresse sont retirés du texte, puis le texte est structuré en profil (compétences, expériences, formations, langues, domaine, niveau) :
-   - avec `ANTHROPIC_API_KEY` dans le `.env` : par Claude (sortie JSON structurée) ;
-   - sans clé, ou si l'API ne répond pas : par l'analyse locale par règles (titres de sections et dates).
+   - par défaut (`AI_ENGINE=ollama`) : par un LLM **local** via Ollama (`llama3.2:3b`), sortie JSON contrainte par un schéma, sans API payante ;
+   - si Ollama ne répond pas, ou avec `AI_ENGINE=regles` : par l'analyse locale par règles (titres de sections et dates).
    Dans les deux cas, tout élément absent du texte du CV est retiré : l'agent n'invente rien.
 4. Le CV passe à `PROCESSED` (profil déduit disponible) ou `ERROR` (`UNREADABLE` : fichier endommagé, `NO_TEXT` : scan illisible). L'application propose alors de réimporter un fichier ou de saisir le profil.
 5. Le candidat appuie sur « Utiliser ce profil » : le profil est rempli, repasse à « non validé », et le candidat le relit puis le valide.
+6. À la validation, le profil est découpé (profil, compétences, chaque expérience, chaque formation), vectorisé avec `nomic-embed-text` (Ollama) et stocké dans Qdrant avec `user_id` et `cv_id`, une seule fois par CV. Sans Docker, Qdrant tourne en mode local dans `backend/storage/qdrant`. État : `GET /profile/vector-index`.
+
+Installation de l'IA locale sur Windows (Ollama, modèles, vérification `python -m app.ai.check`) : voir [backend/docs/ia-locale.md](backend/docs/ia-locale.md).
 
 Quota : 5 opérations IA par jour et par utilisateur ; l'import d'un nouveau fichier en consomme une, un fichier déjà analysé est repris du cache sans en consommer.
 

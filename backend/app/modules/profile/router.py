@@ -1,10 +1,11 @@
 from datetime import datetime, timezone
 from uuid import uuid4
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException
 from pymongo.database import Database
 from app.core.validation import validate_body
 from app.db.mongo import get_db
 from app.modules.auth.deps import get_current_user
+from app.modules.cv.indexing import index_profile
 from app.modules.profile import service
 from app.modules.profile.schemas import SECTION_SCHEMAS, UNIQUE_FIELD, ProfileUpdate, Section
 
@@ -33,13 +34,24 @@ def update_profile(data: ProfileUpdate, user: dict = Depends(get_current_user), 
 
 
 @router.post("/validate")
-def validate_profile(user: dict = Depends(get_current_user), db: Database = Depends(get_db)):
-    """US-2.x : le candidat valide le profil, qui devient la seule référence du matching."""
+def validate_profile(background: BackgroundTasks, user: dict = Depends(get_current_user),
+                     db: Database = Depends(get_db)):
+    """US-2.x : le candidat valide le profil, qui devient la seule référence du matching.
+
+    Ensuite, en tâche de fond, le profil validé est découpé et vectorisé dans Qdrant (une fois par CV)."""
     profile = service.get_or_create(db, user["_id"])
     if not service.is_exploitable(profile):
         raise HTTPException(422, "Profil incomplet : ajoutez des compétences et une formation ou une expérience.")
     db.profiles.update_one({"_id": profile["_id"]}, {"$set": {"validated": True, "validated_at": _now()}})
+    background.add_task(index_profile, db, user["_id"])
     return service.to_out(db.profiles.find_one({"_id": profile["_id"]}))
+
+
+@router.get("/vector-index")
+def vector_index(user: dict = Depends(get_current_user), db: Database = Depends(get_db)):
+    """État de la vectorisation du profil validé : INDEXING, INDEXED ou ERROR (null si jamais lancée)."""
+    info = service.get_or_create(db, user["_id"]).get("vector_index") or {}
+    return {k: info.get(k) for k in ("status", "cv_id", "chunks", "model", "error", "updated_at")}
 
 
 @router.delete("", status_code=204)

@@ -1,8 +1,10 @@
 """Structuration du texte du CV en profil (US-2.2.1).
 
 Deux moteurs, avec la même sortie (un brouillon de profil) :
-- `ClaudeStructurer` : LLM via l'API Claude, sortie JSON structurée. Utilisé si ANTHROPIC_API_KEY est défini.
-- `RuleStructurer` : analyse locale par règles (titres de sections, dates). Sans clé, en test, ou si l'API échoue.
+- `OllamaStructurer` : LLM local via Ollama (ex. llama3.2:3b), sortie JSON contrainte par un schéma.
+  Utilisé si AI_ENGINE=ollama (par défaut). Gratuit, rien ne quitte le PC.
+- `RuleStructurer` : analyse locale par règles (titres de sections, dates). Si AI_ENGINE=regles, en test,
+  ou en secours si Ollama ne répond pas (pas lancé, modèle absent, réponse invalide).
 
 Dans les deux cas, `keep_grounded` retire tout élément absent du texte du CV : l'agent n'ajoute jamais
 une expérience, un diplôme ou une compétence qui n'y figure pas (règle métier).
@@ -263,7 +265,7 @@ class RuleStructurer:
 
 
 # --------------------------------------------------------------------------------------------
-# Moteur LLM (Claude)
+# Moteur LLM local (Ollama)
 # --------------------------------------------------------------------------------------------
 
 _PERIOD_PROPS = {"start_date": {"type": ["string", "null"]}, "end_date": {"type": ["string", "null"]}}
@@ -315,49 +317,44 @@ d'expérience hors stage, « confirme » au-delà ; null si le CV ne permet pas 
 « langue maternelle » = natif) ; sinon null."""
 
 
-class ClaudeStructurer:
-    name = "claude"
+# Un CV dépasse rarement 12 000 caractères ; au-delà on coupe pour tenir dans la fenêtre du petit modèle.
+MAX_CV_CHARS = 12000
 
-    def __init__(self, api_key: str, model: str, timeout: float):
-        import anthropic
 
-        self._anthropic = anthropic
-        self.model = model
-        self.client = anthropic.Anthropic(api_key=api_key, timeout=timeout, max_retries=1)
+class OllamaStructurer:
+    name = "ollama"
+
+    def __init__(self, settings):
+        from app.ai.ollama import get_client
+
+        self.client = get_client(settings)
+        self.model = settings.ollama_model
 
     def structure(self, text: str) -> dict:
-        response = self.client.beta.messages.create(
-            model=self.model,
-            max_tokens=8000,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": f"Texte du CV :\n\n<cv>\n{text}\n</cv>"}],
-            # Effort bas : une extraction simple doit tenir dans la limite de 30 s du cahier des charges.
-            output_config={"effort": "low", "format": {"type": "json_schema", "schema": DRAFT_SCHEMA}},
-            # Si le modèle refuse la requête, l'API la relance sur un modèle de repli.
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
-        )
-        if response.stop_reason == "refusal":
-            raise RuntimeError("Le modèle a refusé d'analyser ce CV.")
-        if response.stop_reason == "max_tokens":
-            raise RuntimeError("Réponse du modèle tronquée.")
-        raw = next(block.text for block in response.content if block.type == "text")
-        return {**empty_draft(), **json.loads(raw)}
+        data = self.client.chat_json(
+            self.model, SYSTEM_PROMPT, f"Texte du CV :\n\n<cv>\n{text[:MAX_CV_CHARS]}\n</cv>", DRAFT_SCHEMA)
+        if not isinstance(data, dict):
+            raise ValueError("Le modèle n'a pas renvoyé un objet JSON.")
+        draft = {**empty_draft(), **data}
+        for key in ("skills", "experiences", "educations", "languages"):
+            # Un petit modèle peut renvoyer null ou des éléments mal formés : on ne garde que les objets.
+            draft[key] = [item for item in (draft.get(key) or []) if isinstance(item, dict)]
+        return draft
 
 
-def get_structurer(settings) -> "RuleStructurer | ClaudeStructurer":
-    if settings.anthropic_api_key:
-        return ClaudeStructurer(settings.anthropic_api_key, settings.ai_model, settings.ai_timeout_seconds)
+def get_structurer(settings) -> "RuleStructurer | OllamaStructurer":
+    if settings.ai_engine == "ollama":
+        return OllamaStructurer(settings)
     return RuleStructurer()
 
 
 def structure_text(text: str, settings) -> tuple[dict, str]:
-    """Structure le texte (déjà anonymisé) ; repli sur les règles locales si l'API ne répond pas."""
+    """Structure le texte (déjà anonymisé) ; repli sur les règles locales si Ollama ne répond pas."""
     structurer = get_structurer(settings)
     try:
         draft = structurer.structure(text)
         engine = structurer.name
-    except Exception as e:  # erreur réseau, quota de l'API, réponse invalide…
+    except Exception as e:  # Ollama pas lancé, modèle pas téléchargé, délai dépassé, JSON invalide…
         if isinstance(structurer, RuleStructurer):
             raise
         logger.warning("Analyse par le LLM impossible (%s) : repli sur l'analyse par règles.", e)

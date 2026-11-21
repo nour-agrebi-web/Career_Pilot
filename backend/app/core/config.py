@@ -15,10 +15,19 @@ class Settings(BaseSettings):
     # mais en production il faut une clé dédiée). Générer avec :
     # python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     cv_encryption_key: str = ""
-    # Structuration du CV par un LLM (Claude). Vide : analyse locale par règles, sans IA externe.
-    anthropic_api_key: str = ""
-    ai_model: str = "claude-opus-5-5"
-    ai_timeout_seconds: float = 25.0     # l'analyse complète doit rester sous 30 s
+    # IA locale (Ollama, https://ollama.com) : aucune API payante, rien ne sort du PC.
+    # ai_engine = "ollama" : le CV est structuré par le LLM local (repli sur les règles si Ollama ne répond pas).
+    # ai_engine = "regles" : analyse par règles uniquement, sans LLM.
+    ai_engine: str = "ollama"
+    ollama_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3.2:3b"            # ou "mistral:7b" (meilleur, plus lent)
+    ollama_embed_model: str = "nomic-embed-text"  # embeddings de 768 dimensions
+    ollama_timeout_seconds: float = 120.0         # un LLM sur CPU est plus lent qu'une API en ligne
+    # Base vectorielle Qdrant. Sans Docker : mode local embarqué, les vecteurs sont dans un dossier.
+    # Pour passer plus tard à un serveur Qdrant (Docker ou cloud), il suffit de renseigner QDRANT_URL.
+    qdrant_path: str = "storage/qdrant"
+    qdrant_url: str = ""
+    qdrant_api_key: str = ""
     ai_daily_quota: int = 5              # règle métier : 5 opérations IA par jour et par utilisateur
     # Chemin de tesseract.exe si Tesseract n'est pas dans le PATH (Windows), pour les CV scannés.
     tesseract_cmd: str = ""

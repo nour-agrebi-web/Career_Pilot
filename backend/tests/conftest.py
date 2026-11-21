@@ -9,10 +9,24 @@ TEST_DB = settings.mongodb_test_db
 assert TEST_DB != settings.mongodb_db, "La base de test doit être différente de la base de dev."
 
 
+def fake_embed(texts, settings=None):
+    """Embeddings factices et déterministes (8 dimensions) à la place d'Ollama."""
+    import hashlib
+    return [[b / 255 for b in hashlib.sha256(t.encode()).digest()[:8]] for t in texts]
+
+
 @pytest.fixture(autouse=True)
 def no_external_ai(monkeypatch):
-    # Les tests n'appellent jamais l'API Claude : analyse locale par règles.
-    monkeypatch.setattr(settings, "anthropic_api_key", "")
+    # Les tests n'ont besoin ni d'Ollama ni d'un dossier Qdrant : analyse par règles, Qdrant en mémoire.
+    from app.modules.cv import indexing
+    from app.vector import store
+    monkeypatch.setattr(indexing, "embed_documents", fake_embed)
+    monkeypatch.setattr(settings, "ai_engine", "regles")
+    monkeypatch.setattr(settings, "qdrant_url", "")
+    monkeypatch.setattr(settings, "qdrant_path", ":memory:")
+    store.reset_client()
+    yield
+    store.reset_client()
 
 
 @pytest.fixture()

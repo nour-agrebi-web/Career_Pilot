@@ -93,6 +93,9 @@ def test_appliquer_le_profil_deduit(client, headers, storage):
     assert client.get(f"/cvs/{cv['id']}", headers=headers).json()["applied"] is True
     # Le candidat peut ensuite valider son profil (au moins une compétence et une formation).
     assert client.post("/profile/validate", headers=headers).json()["validated"] is True
+    # Puis le profil validé est vectorisé dans Qdrant, rattaché à ce CV.
+    state = client.get("/profile/vector-index", headers=headers).json()
+    assert state["status"] == "INDEXED" and state["cv_id"] == cv["id"]
 
 
 def test_sections_vides_signalees(client, headers, storage):
@@ -198,11 +201,11 @@ def test_llm_invente_une_competence_retiree(client, headers, storage, monkeypatc
                 "skills": [{"name": "Kotlin"}, {"name": "Docker"}], "experiences": [], "educations": [],
                 "languages": []}
 
-    monkeypatch.setattr(settings, "anthropic_api_key", "cle-de-test")
-    monkeypatch.setattr(structuring.ClaudeStructurer, "structure", fake_structure)
+    monkeypatch.setattr(settings, "ai_engine", "ollama")
+    monkeypatch.setattr(structuring.OllamaStructurer, "structure", fake_structure)
     cv = upload(client, headers, content=make_pdf()).json()
     result = analysis(client, headers, cv["id"])
-    assert result["engine"] == "claude" and result["draft"]["domain"] == "Développement mobile"
+    assert result["engine"] == "ollama" and result["draft"]["domain"] == "Développement mobile"
     assert result["draft"]["skills"] == [{"name": "Kotlin"}]  # Docker n'est pas dans le CV
     assert "nour.agrebi@example.com" not in sent["text"] and "AGREBI" not in sent["text"]
 
@@ -211,10 +214,10 @@ def test_repli_sur_les_regles_si_le_llm_echoue(client, headers, storage, monkeyp
     from app.modules.cv import structuring
 
     def broken(self, text):
-        raise TimeoutError("API injoignable")
+        raise TimeoutError("Ollama injoignable")
 
-    monkeypatch.setattr(settings, "anthropic_api_key", "cle-de-test")
-    monkeypatch.setattr(structuring.ClaudeStructurer, "structure", broken)
+    monkeypatch.setattr(settings, "ai_engine", "ollama")
+    monkeypatch.setattr(structuring.OllamaStructurer, "structure", broken)
     cv = upload(client, headers, content=make_pdf()).json()
     result = analysis(client, headers, cv["id"])
     assert result["status"] == "PROCESSED" and result["engine"] == "regles"
