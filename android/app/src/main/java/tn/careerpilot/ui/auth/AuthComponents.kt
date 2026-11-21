@@ -325,4 +325,4 @@ fun authMessage(form: FormState, lockSecondsLeft: Int): String? =
 
 /** Texte du bouton de connexion : le compte à rebours remplace « Se connecter » pendant un blocage. */
 fun loginButtonText(lockSecondsLeft: Int): String =
-    if (lockSecondsLeft > 0) "Bloqué · ${formatCountdown(lockSecondsLeft)}" else "Se connecter"
+    if (lockSecondsLeft > 0) "${formatCountdown(lockSecondsLeft)}" else "Se connecter"
