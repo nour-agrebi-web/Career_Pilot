@@ -90,7 +90,8 @@ def score_all(storage: Storage, profile: dict) -> dict:
 def run(storage: Storage, client, profile: dict, source_names: list[str], max_details: int = 40) -> dict:
     run_id = storage.start_run()
     t0 = time.time()
-    stats = {"sources": collect(storage, client, source_names, max_details)}
+    stats = {"offres_completees": storage.backfill_matching_fields(),
+             "sources": collect(storage, client, source_names, max_details)}
     stats["score"] = score_all(storage, profile)
     stats["duree_s"] = round(time.time() - t0, 1)
     stats["requetes_http_total"] = client.requests_sent

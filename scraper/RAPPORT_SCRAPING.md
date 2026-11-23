@@ -13,7 +13,7 @@
 - **Écartées** : LinkedIn et Indeed (leurs conditions interdisent le scraping), France Travail (son API Offres n'est plus ouverte au public).
 - Optimisations : 1 requête pour lister tout un site, requêtes conditionnelles (réponse 304 sans contenu), cache HTTP, déduplication par URL et par empreinte, pause de 2 s entre deux requêtes au même site, plafond de pages lues par exécution, respect automatique de robots.txt.
 - **Score de 0 à 100** par mots-clés pondérés. **Le score de chaque offre est stocké, même sous le seuil** : le seuil est un simple filtre de lecture. Baisser le seuil affiche des offres déjà en base, sans requête réseau ni recalcul.
-- **28 tests automatiques, tous verts** (MongoDB simulé avec mongomock, comme dans les tests du backend). Sur les données simulées, la 1re exécution envoie 11 requêtes. La 2e, sans changement côté sites, en envoie 4, toutes répondues par « 304 Non modifié », et ne recalcule aucun score.
+- **33 tests automatiques, tous verts** (MongoDB simulé avec mongomock, comme dans les tests du backend). Sur les données simulées, la 1re exécution envoie 11 requêtes. La 2e, sans changement côté sites, en envoie 4, toutes répondues par « 304 Non modifié », et ne recalcule aucun score.
 
 ---
 
@@ -245,6 +245,20 @@ python -m jobscraper stats
 7. Les ventilations du cahier des charges (40 similarité, 30 compétences, 15 niveau, 15 préférences) ne sont pas reprises telles quelles : c'est la version simplifiée validée. La formule complète existe déjà dans `backend/app/modules/offers/matching.py`.
 
 ---
+
+## 10 bis. Correctif du 23/11 : offres visibles dans l'app
+
+Constat : les offres collectées étaient bien dans MongoDB, mais n'apparaissaient pas dans « Mes offres ». Le fil de l'app affiche la collection `matches`, que `POST /matches/refresh` remplit seulement avec les offres dont le score **calculé par le backend** atteint le seuil (70 par défaut).
+
+Or le backend donne 30 points aux compétences exigées (`required_skills`) et 15 au niveau (`level`). Le scraper laissait ces deux champs vides, ce qui donnait toujours 15/30 et 8/15. Une offre idéale plafonnait donc vers 76/100, et la plupart restaient sous 70. Sur les données de test, une seule offre sur six passait le seuil.
+
+Correctif (`jobscraper/enrich.py`) :
+- `required_skills` : compétences de l'offre repérées dans un dictionnaire d'environ 90 compétences courantes (C#, .NET et SQL Server sont reconnus).
+- `level` : stage, junior ou confirme, déduit du titre (« Stage PFE », « Lead », « Junior »…) ou de l'expérience demandée.
+- Une ville inconnue est stockée comme `""` et non plus `None`, parce que le matching du backend appelait `.strip()` dessus et plantait.
+- Les offres déjà en base sont complétées automatiquement au début de chaque `run`, sans réseau.
+
+5 tests ont été ajoutés, dont 3 qui lancent le **vrai** `score()` du backend sur les offres du scraper. Ils vérifient que l'offre « Développeur Python » atteint au moins 70 et qu'aucune offre ne fait planter le matching.
 
 ## 11. Suite logique pour l'intégration dans le backend
 
