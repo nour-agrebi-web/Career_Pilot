@@ -17,7 +17,7 @@
 | **Sortie structurée** | On donne au LLM un schéma JSON, et Ollama l'oblige à répondre avec ce format. | Le schéma `DRAFT_SCHEMA` de `structuring.py`. |
 | **Embedding** | Un texte transformé en liste de nombres (768 ici). Deux textes de sens proche donnent des listes proches. | « Développeur Android » et « Mobile Kotlin developer » seront proches, même sans mot commun. |
 | **Chunk (morceau)** | Une partie du CV vectorisée séparément. | Un morceau « profil », un « compétences », un par expérience, un par formation. |
-| **Base vectorielle** | Une base qui range des vecteurs et retrouve les plus proches d'un vecteur donné. | Qdrant, collection `cv_chunks`. Plus tard, collection `offers`. |
+| **Base vectorielle** | Une base qui range des vecteurs et retrouve les plus proches d'un vecteur donné. | Qdrant, collections `cv_chunks` (profils) et `offers` (offres). |
 
 ## Le parcours complet
 
@@ -55,7 +55,9 @@ Pourquoi vectoriser le **profil validé** et pas le texte brut du CV ? Parce qu'
 | `app/vector/store.py` | Accès à Qdrant : mode local (`QDRANT_PATH`) ou serveur (`QDRANT_URL`). Collections `cv_chunks` et `offers`. |
 | `app/modules/profile/router.py` | `POST /profile/validate` lance la vectorisation ; `GET /profile/vector-index` donne son état. |
 | `app/core/config.py`, `.env.example` | Nouveaux réglages `AI_ENGINE`, `OLLAMA_*`, `QDRANT_*`. La clé Anthropic est supprimée. |
-| `tests/test_indexing.py` | Tests sans Ollama (embeddings factices) avec Qdrant en mémoire. |
+| `app/modules/offers/indexing.py` | Vectorisation des offres nouvelles ou modifiées (collection `offers`) et similarité profil ↔ offres pour le matching. |
+| `app/modules/offers/matching.py` | Score sur 100 : les 40 points « similarité » viennent des embeddings, ou des mots-clés en repli. |
+| `tests/test_indexing.py`, `tests/test_offer_indexing.py` | Tests sans Ollama (embeddings factices) avec Qdrant en mémoire. |
 
 ## Installation sur Windows
 
@@ -156,10 +158,30 @@ docker run -p 6333:6333 -v qdrant_data:/qdrant/storage qdrant/qdrant
 
 puis dans `.env` : `QDRANT_URL=http://localhost:6333` (et `QDRANT_API_KEY=...` pour Qdrant Cloud). Aucun code à changer. Il faudra seulement revalider les profils (ou relancer la vectorisation) pour remplir le nouveau serveur, car les données du dossier local n'y sont pas copiées.
 
-## La suite (pas encore faite) : offres tunisiennes et matching
+## Vectorisation des offres et matching sémantique
 
-La structure est prête pour ces étapes :
+Les offres collectées par le scraper (`scraper/`) arrivent dans MongoDB. Le scraper n'a pas besoin d'Ollama : c'est le backend qui les vectorise.
 
-1. **Connecteurs d'offres** (`app/modules/offers/connectors/`, un fichier par site : Tanitjobs, Keejob, Aneti, TunisieJobs). Chacun récupère les offres et les enregistre dans MongoDB avec `(source, source_id)`, qui est déjà un index unique. Il faut vérifier pour chaque site ses conditions d'utilisation et son `robots.txt`, et préférer un flux RSS ou une API quand il en existe. **LinkedIn interdit le scraping** : on ne l'inclut pas.
-2. **Vectorisation des offres** : même principe que le CV, dans la collection `store.OFFERS` déjà prévue, avec `offer_id` et `source` dans le payload.
-3. **Matching** : pour une offre, `embed_query(texte de l'offre)` puis `store.search(..., store.CV_CHUNKS, vecteur, user_id=...)` donne la similarité avec chaque morceau du profil. Cette similarité remplacera le recouvrement de mots-clés provisoire dans `app/modules/offers/matching.py` (les 40 points « similarité » du score), sans changer le reste du calcul.
+- **Quand ?** Au début de chaque `POST /matches/refresh`, ou à la main avec `python -m app.modules.offers.indexing` (serveur arrêté en mode Qdrant local).
+- **Quoi ?** Pour chaque offre active : un texte (titre, compétences, niveau, description) devient un vecteur `nomic-embed-text`, rangé dans la collection Qdrant `offers` avec `offer_id`, `source` et `source_id` dans le payload. Un point par offre, sans doublon.
+- **Seulement le nouveau.** L'empreinte du texte vectorisé et du modèle est gardée dans l'offre (`offers.vector_index`). Une offre inchangée n'est pas renvoyée à Ollama ; une offre dont le scraper a modifié le contenu est revectorisée ; une offre expirée est retirée de Qdrant.
+- **Matching.** Le profil validé (les mêmes morceaux que `cv_chunks`) est vectorisé comme une requête (`search_query:`), puis `store.search` donne la similarité cosinus avec chaque offre. Elle remplace le recouvrement de mots-clés dans les 40 points « similarité » ; compétences (30), niveau (15) et préférences (15) ne changent pas. Conversion : cosinus ≤ 0,40 → 0 point, ≥ 0,75 → 40 points, linéaire entre les deux (`COSINE_LOW` / `COSINE_HIGH` dans `matching.py`, à ajuster sur de vraies offres).
+- **Repli.** Si Ollama est éteint, le modèle absent ou le dossier Qdrant verrouillé, le matching retombe sur les mots-clés, sans erreur. La réponse de `POST /matches/refresh` indique `"semantic_engine": "embeddings"` ou `"mots-cles"`.
+
+Tester en local :
+
+```powershell
+ollama pull nomic-embed-text
+cd scraper
+python -m jobscraper run              # collecte les offres dans MongoDB (sans Ollama)
+cd ..\backend
+python -m app.modules.offers.indexing # facultatif : vectorise tout de suite, ex. {"vectorisees": 42, ...}
+uvicorn app.main:app --reload
+```
+
+Puis dans Swagger : valider le profil, puis `POST /matches/refresh` doit répondre `"semantic_engine": "embeddings"`.
+
+## La suite (pas encore faite)
+
+1. **Autres connecteurs d'offres** (Aneti, TunisieJobs) dans le scraper. Il faut vérifier pour chaque site ses conditions d'utilisation et son `robots.txt`, et préférer un flux RSS ou une API quand il en existe. **LinkedIn interdit le scraping** : on ne l'inclut pas.
+2. **Calibrer la similarité** : regarder les cosinus obtenus sur de vraies offres et ajuster `COSINE_LOW` / `COSINE_HIGH`.

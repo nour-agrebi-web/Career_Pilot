@@ -116,6 +116,8 @@ Le score (0 à 100) suit le cahier des charges : 40 similarité + 30 compétence
 5. Le candidat appuie sur « Utiliser ce profil » : le profil est rempli, repasse à « non validé », et le candidat le relit puis le valide.
 6. À la validation, le profil est découpé (profil, compétences, chaque expérience, chaque formation), vectorisé avec `nomic-embed-text` (Ollama) et stocké dans Qdrant avec `user_id` et `cv_id`, une seule fois par CV. Sans Docker, Qdrant tourne en mode local dans `backend/storage/qdrant`. État : `GET /profile/vector-index`.
 
+7. Les offres collectées par le scraper sont vectorisées par le backend (collection Qdrant `offers`, seulement les offres nouvelles ou modifiées). `POST /matches/refresh` compare le profil validé aux offres : les 40 points « similarité » du score viennent des embeddings, ou des mots-clés si Ollama ou Qdrant est indisponible.
+
 Installation de l'IA locale sur Windows (Ollama, modèles, vérification `python -m app.ai.check`) : voir [backend/docs/ia-locale.md](backend/docs/ia-locale.md).
 
 Quota : 5 opérations IA par jour et par utilisateur ; l'import d'un nouveau fichier en consomme une, un fichier déjà analysé est repris du cache sans en consommer.

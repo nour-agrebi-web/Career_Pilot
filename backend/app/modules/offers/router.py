@@ -7,6 +7,7 @@ from pymongo.database import Database
 from app.core.ids import parse_id
 from app.db.mongo import get_db
 from app.modules.auth.deps import get_current_user
+from app.modules.offers.indexing import semantic_scores
 from app.modules.offers.matching import score
 from app.modules.preferences.router import get_preferences
 from app.modules.profile import service as profiles
@@ -86,8 +87,10 @@ def refresh_matches(user: dict = Depends(get_current_user), db: Database = Depen
     prefs = get_preferences(db, user["_id"])
     now = datetime.now(timezone.utc)
     created = 0
+    # Similarité sémantique (embeddings) ; None si Ollama ou Qdrant ne répond pas -> mots-clés.
+    similarities = semantic_scores(db, profile)
     for offer in db.offers.find({"status": "ACTIVE"}):
-        result = score(profile, prefs, offer)
+        result = score(profile, prefs, offer, (similarities or {}).get(str(offer["_id"])))
         if result is None or result.score < prefs["threshold"]:
             continue
         update = db.matches.update_one(
@@ -101,7 +104,7 @@ def refresh_matches(user: dict = Depends(get_current_user), db: Database = Depen
             upsert=True,
         )
         created += 1 if update.upserted_id else 0
-    return {"new_matches": created}
+    return {"new_matches": created, "semantic_engine": "embeddings" if similarities is not None else "mots-cles"}
 
 
 @router.get("/matches")
