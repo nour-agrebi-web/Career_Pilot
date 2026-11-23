@@ -28,4 +28,7 @@ Planification (toutes les 3 heures, de 7 h à 22 h) :
 
 Sous Windows : Planificateur de tâches, action `python -m jobscraper run`, dossier de départ = ce dossier.
 
+Vectorisation : le scraper n'utilise ni Ollama ni Qdrant. Le backend vectorise les offres nouvelles ou modifiées
+au prochain `POST /matches/refresh`, ou avec `python -m app.modules.offers.indexing` (dossier `backend`).
+
 Le rapport complet est dans `RAPPORT_SCRAPING.md`.

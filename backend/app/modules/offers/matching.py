@@ -2,9 +2,10 @@
 
 Score sur 100 = 40 similarité + 30 compétences clés + 15 niveau et expérience + 15 préférences.
 
-La similarité sémantique est ici une version provisoire, sans IA : recouvrement des mots-clés
-du profil et de l'offre. Elle sera remplacée par les embeddings multilingues (Epic 4) sans
-changer le reste du calcul.
+Similarité (40) : cosinus entre l'embedding du profil validé et celui de l'offre (nomic-embed-text,
+voir indexing.py), ramené sur 0..1 par `semantic_ratio`. Si Ollama ou Qdrant est indisponible, ou si
+l'offre n'est pas encore vectorisée, on retombe sur le recouvrement des mots-clés du profil et de l'offre.
+Le reste du calcul (compétences, niveau, préférences) ne dépend pas de ce choix.
 """
 import math
 import re
@@ -13,6 +14,15 @@ from dataclasses import dataclass, field
 
 WEIGHTS = {"semantic": 40, "skills": 30, "level": 15, "preferences": 15}
 LEVELS = ["stage", "junior", "confirme"]
+
+# Cosinus nomic-embed-text -> part des 40 points. Entre deux textes sans rapport le cosinus reste vers 0,3-0,4,
+# entre un profil et une offre du même métier il monte vers 0,7-0,8 : en dessous de COSINE_LOW, 0 point ;
+# au-dessus de COSINE_HIGH, 40 points ; linéaire entre les deux. Valeurs à ajuster sur de vraies offres.
+COSINE_LOW, COSINE_HIGH = 0.40, 0.75
+
+
+def semantic_ratio(cosine: float) -> float:
+    return max(0.0, min(1.0, (cosine - COSINE_LOW) / (COSINE_HIGH - COSINE_LOW)))
 
 # Synonymes normalisés (même compétence écrite autrement).
 SYNONYMS = {
@@ -66,7 +76,25 @@ def eliminated(profile: dict, prefs: dict, offer: dict) -> str | None:
     return None
 
 
-def score(profile: dict, prefs: dict, offer: dict) -> MatchResult | None:
+def keyword_ratio(profile: dict, offer: dict) -> float:
+    """Repli sans IA : cosinus entre les ensembles de mots-clés du profil et de l'offre."""
+    profile_words = set()
+    for s in profile.get("skills", []):
+        profile_words |= keywords(s["name"])
+    for e in profile.get("experiences", []):
+        profile_words |= keywords(e["position"])
+    for e in profile.get("educations", []):
+        profile_words |= keywords(e["degree"])
+    profile_words |= keywords(profile.get("domain") or "")
+    required = offer.get("required_skills", [])
+    offer_words = keywords(f"{offer['title']} {offer.get('description') or ''} {' '.join(required)}")
+    common = profile_words & offer_words
+    cosine = len(common) / math.sqrt(len(profile_words) * len(offer_words)) if profile_words and offer_words else 0
+    return min(1.0, cosine * 2.5)
+
+
+def score(profile: dict, prefs: dict, offer: dict, similarity: float | None = None) -> MatchResult | None:
+    """`similarity` : cosinus des embeddings profil/offre, ou None pour utiliser les mots-clés."""
     if eliminated(profile, prefs, offer):
         return None
     reasons: list[str] = []
@@ -80,19 +108,8 @@ def score(profile: dict, prefs: dict, offer: dict) -> MatchResult | None:
     if matched:
         reasons.append(f"{', '.join(matched[:3])} présent{'s' if len(matched) > 1 else ''} dans votre profil")
 
-    # 2. Similarité (40) : cosinus entre les ensembles de mots-clés.
-    profile_words = set()
-    for s in profile.get("skills", []):
-        profile_words |= keywords(s["name"])
-    for e in profile.get("experiences", []):
-        profile_words |= keywords(e["position"])
-    for e in profile.get("educations", []):
-        profile_words |= keywords(e["degree"])
-    profile_words |= keywords(profile.get("domain") or "")
-    offer_words = keywords(f"{offer['title']} {offer.get('description') or ''} {' '.join(required)}")
-    common = profile_words & offer_words
-    cosine = len(common) / math.sqrt(len(profile_words) * len(offer_words)) if profile_words and offer_words else 0
-    semantic_ratio = min(1.0, cosine * 2.5)
+    # 2. Similarité (40) : embeddings si disponibles, sinon recouvrement des mots-clés.
+    semantic = semantic_ratio(similarity) if similarity is not None else keyword_ratio(profile, offer)
 
     # 3. Niveau et expérience (15).
     wanted, have = offer.get("level"), profile.get("level")
@@ -118,7 +135,7 @@ def score(profile: dict, prefs: dict, offer: dict) -> MatchResult | None:
     pref_ratio = pref_points / 3
 
     breakdown = {
-        "semantic": round(WEIGHTS["semantic"] * semantic_ratio),
+        "semantic": round(WEIGHTS["semantic"] * semantic),
         "skills": round(WEIGHTS["skills"] * skills_ratio),
         "level": round(WEIGHTS["level"] * level_ratio),
         "preferences": round(WEIGHTS["preferences"] * pref_ratio),

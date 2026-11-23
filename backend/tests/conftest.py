@@ -9,6 +9,11 @@ TEST_DB = settings.mongodb_test_db
 assert TEST_DB != settings.mongodb_db, "La base de test doit être différente de la base de dev."
 
 
+def ollama_absent(*args, **kwargs):
+    from app.ai.ollama import OllamaError
+    raise OllamaError("Ollama injoignable (tests)")
+
+
 def fake_embed(texts, settings=None):
     """Embeddings factices et déterministes (8 dimensions) à la place d'Ollama."""
     import hashlib
@@ -19,8 +24,12 @@ def fake_embed(texts, settings=None):
 def no_external_ai(monkeypatch):
     # Les tests n'ont besoin ni d'Ollama ni d'un dossier Qdrant : analyse par règles, Qdrant en mémoire.
     from app.modules.cv import indexing
+    from app.modules.offers import indexing as offer_indexing
     from app.vector import store
     monkeypatch.setattr(indexing, "embed_documents", fake_embed)
+    # Matching : par défaut comme sans Ollama (repli sur les mots-clés) ; test_offer_indexing.py simule les embeddings.
+    monkeypatch.setattr(offer_indexing, "embed_documents", ollama_absent)
+    monkeypatch.setattr(offer_indexing, "embed_query", ollama_absent)
     monkeypatch.setattr(settings, "ai_engine", "regles")
     monkeypatch.setattr(settings, "qdrant_url", "")
     monkeypatch.setattr(settings, "qdrant_path", ":memory:")

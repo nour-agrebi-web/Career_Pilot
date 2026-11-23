@@ -372,6 +372,20 @@ class BackendCompatTests(unittest.TestCase):
         for offer in self.db.offers.find():
             self.matching.score(self.profile, {**self.prefs, "job_types": ["stage", "emploi", None]}, offer)
 
+    def test_score_avec_similarite_des_embeddings(self):
+        # Le backend passe la similarité cosinus quand l'offre est vectorisée ; sinon, mots-clés comme avant.
+        offer = self.db.get_offer("Keejob", "900001")
+        with_embeddings = self.matching.score(self.profile, self.prefs, offer, similarity=0.9)
+        self.assertEqual(with_embeddings.breakdown["semantic"], 40)
+
+    def test_le_scraper_garde_l_etat_de_vectorisation(self):
+        # vector_index est écrit par le backend (app/modules/offers/indexing.py) : le scraper ne doit pas l'effacer,
+        # sinon toutes les offres seraient revectorisées à chaque run.
+        self.db.offers.update_many({}, {"$set": {"vector_index": {"fingerprint": "x", "model": "nomic-embed-text"}}})
+        client, _ = make(FakeWeb(), self.db, delay=0)
+        run(self.db, client, PROFILE, SOURCES)
+        self.assertEqual(self.db.offers.count_documents({"vector_index.fingerprint": "x"}), 7)
+
     def test_offres_anciennes_completees(self):
         self.db.offers.update_many({}, {"$unset": {"level": ""}, "$set": {"required_skills": [],
                                                                           "location.city": None}})

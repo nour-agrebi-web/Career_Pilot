@@ -8,7 +8,8 @@ Deux modes, choisis par la configuration, avec exactement le même code au-dessu
 Collections :
 - CV_CHUNKS : morceaux des CV validés (compétences, expériences, formations), un point par morceau,
   avec dans le « payload » user_id, cv_id, section et le texte. Filtrables par user_id / cv_id.
-- OFFERS : réservée à l'étape suivante (offres d'emploi vectorisées pour le matching).
+- OFFERS : offres d'emploi vectorisées (un point par offre), avec offer_id, source et source_id dans le payload.
+  Le matching compare le profil validé à ces vecteurs (app/modules/offers/indexing.py).
 """
 import threading
 import warnings
@@ -44,14 +45,15 @@ def reset_client() -> None:
         _client = None
 
 
-def ensure_collection(client: QdrantClient, name: str, size: int) -> None:
+def ensure_collection(client: QdrantClient, name: str, size: int,
+                      indexed_fields: tuple[str, ...] = ("user_id", "cv_id")) -> None:
     """Crée la collection si besoin (distance cosinus) et les index des champs filtrés."""
     if client.collection_exists(name):
         return
     client.create_collection(name, vectors_config=models.VectorParams(size=size, distance=models.Distance.COSINE))
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")  # en mode local, Qdrant prévient que ces index sont inutiles
-        for field in ("user_id", "cv_id"):
+        for field in indexed_fields:
             client.create_payload_index(name, field, models.PayloadSchemaType.KEYWORD)
 
 
@@ -69,6 +71,15 @@ def count_where(client: QdrantClient, name: str, **fields) -> int:
     if not client.collection_exists(name):
         return 0
     return client.count(name, count_filter=_match(**fields), exact=True).count
+
+
+def count_all(client: QdrantClient, name: str) -> int:
+    return client.count(name, exact=True).count if client.collection_exists(name) else 0
+
+
+def delete_ids(client: QdrantClient, name: str, ids: list[str]) -> None:
+    if ids and client.collection_exists(name):
+        client.delete(name, points_selector=models.PointIdsList(points=ids))
 
 
 def upsert(client: QdrantClient, name: str, points: list[tuple[str, list[float], dict]]) -> None:
