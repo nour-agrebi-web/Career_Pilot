@@ -2,7 +2,7 @@
 
 Application mobile pilotée par un agent IA qui surveille les offres d'emploi, ne garde que celles adaptées au CV du candidat et l'aide à améliorer son CV.
 
-Projet d'Intégration · ISET Radès · 2026/2027 · Mohamed Amine Hayouni, Nour Houda Agrebi, Ahmed Dhia eddine Battikh
+Projet d'Intégration · ISET Radès · 2026/2027 · Mohamed Amine Hayouni, Nour El Houda Agrebi
 
 ## Structure
 
