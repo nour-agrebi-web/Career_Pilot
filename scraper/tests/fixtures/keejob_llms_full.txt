@@ -1,0 +1,8 @@
+# Keejob — offres d'emploi actives
+
+> 4 offres actives au 2026-11-23, de la plus récente à la plus ancienne. Chaque lien pointe vers le détail de l'offre en Markdown.
+
+- [Développeur Python / FastAPI (H/F)](https://www.keejob.com/offres-emploi/900001/developpeur-python-fastapi-hf.md): Nexa Digital · Tunis · CDI, SIVP · Hybride · publiée le 2026-11-23
+- [Conseillers Clients Germanophones](https://www.keejob.com/offres-emploi/900002/conseillers-clients-germanophones.md): Call Plus · Tunis · CDI · Sur site · publiée le 2026-11-23
+- [Data Analyst junior](https://www.keejob.com/offres-emploi/900003/data-analyst-junior.md): Orbit Labs · Sfax · CDD · publiée le 2026-11-22
+- [Stage PFE – Développeur Android Kotlin](https://www.keejob.com/offres-emploi/900004/stage-pfe-developpeur-android-kotlin.md): Smart Hire · Ariana · Stage · Hybride · publiée le 2026-11-21

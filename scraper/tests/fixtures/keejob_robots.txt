@@ -1,0 +1,7 @@
+User-agent: *
+Disallow: /api/
+Disallow: /recruiter/*
+Allow: /recruiter/$
+Disallow: /offres-emploi/*/postuler/
+Disallow: /offres-emploi/*/print/
+Disallow: /*paginate_by=

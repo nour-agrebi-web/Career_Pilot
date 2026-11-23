@@ -9,6 +9,7 @@ Projet d'Intégration · ISET Radès · 2026/2027 · Mohamed Amine Hayouni, Nour
 ```text
 backend/   API FastAPI (Python) + MongoDB, monolithe modulaire : auth, cv, profile, offers, notifications, admin
 android/   Application Android native : Kotlin, MVVM, Jetpack Compose, Retrofit, Room (à ouvrir dans Android Studio)
+scraper/   Collecte des offres (Keejob, TanitJobs) vers la base MongoDB du backend, score de pertinence : voir scraper/RAPPORT_SCRAPING.md
 .github/   Intégration continue : tests backend + tests et compilation de l'app Android
 ```
 

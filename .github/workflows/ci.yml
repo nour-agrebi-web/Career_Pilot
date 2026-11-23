@@ -36,6 +36,22 @@ jobs:
       - name: Données de test
         run: python -m seeds.seed_dev
 
+  scraper:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scraper
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: scraper/requirements.txt
+      - run: pip install -r requirements.txt
+      - name: Tests du scraper (réseau et MongoDB simulés)
+        run: python -m unittest discover -s tests -t . -v
+
   android:
     runs-on: ubuntu-latest
     defaults:

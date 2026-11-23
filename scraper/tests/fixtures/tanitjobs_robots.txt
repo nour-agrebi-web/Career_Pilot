@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /resumes/
+Disallow: /*searchID=
+Disallow: /*keywords
+
+User-agent: PetalBot
+Disallow: /
+
+Sitemap: https://www.tanitjobs.com/sitemap_index.xml
