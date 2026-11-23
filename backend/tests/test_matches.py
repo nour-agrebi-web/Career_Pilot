@@ -63,3 +63,13 @@ def test_offre_hors_type_eliminee():
     offer = {"title": "Dev", "type": "emploi", "required_skills": ["Python"], "location": {"city": "Tunis"}}
     assert score(profile, prefs, offer) is None
     assert score(profile, {**prefs, "job_types": ["emploi"]}, offer).breakdown["skills"] == 30
+
+
+def test_offre_sans_ville_ni_description_ne_plante_pas():
+    # Offres collectées par le scraper : ville et description parfois absentes (None).
+    profile = {"skills": [{"name": "Python"}], "languages": [], "level": "junior"}
+    prefs = {"job_types": ["emploi"], "locations": [{"city": "Tunis"}], "remote_work": True}
+    offer = {"title": "Dev Python", "type": "emploi", "required_skills": ["Python"],
+             "location": {"city": None, "country": None}, "description": None}
+    assert score(profile, prefs, offer) is None          # hors zone, mais sans erreur
+    assert score(profile, {**prefs, "locations": []}, {**offer, "location": None}) is not None
