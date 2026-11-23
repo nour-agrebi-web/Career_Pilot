@@ -1,0 +1,21 @@
+{
+  "_comment": "Mots-clés extraits du CV validé. Poids 1 à 3 : 3 = compétence clé. En production, ce fichier sera produit à partir du profil MongoDB.",
+  "skills": {
+    "python": 3, "kotlin": 3, "android": 3, "java": 2, "sql": 2, "fastapi": 2, "django": 1,
+    "mongodb": 2, "react": 1, "javascript": 1, "git": 1, "docker": 1, "api rest": 2,
+    "machine learning": 2, "data": 1, "power bi": 1, "linux": 1, "scrum": 1
+  },
+  "synonyms": {
+    "api rest": ["rest api", "api restful", "web services"],
+    "machine learning": ["apprentissage automatique", "intelligence artificielle", "ia"],
+    "javascript": ["js", "node.js", "typescript"],
+    "react": ["react.js", "reactjs", "react native"]
+  },
+  "saturation": 6,
+  "titles": ["developpeur", "developer", "dev", "ingenieur logiciel", "full stack", "fullstack",
+             "data analyst", "data scientist", "android", "mobile", "backend", "stage pfe", "pfe"],
+  "cities": ["tunis", "ariana", "ben arous", "la marsa", "manouba", "lac"],
+  "contracts": ["stage", "emploi"],
+  "exclude": ["commercial", "teleconseiller", "conseiller client", "comptable", "chauffeur"],
+  "threshold": 70
+}
