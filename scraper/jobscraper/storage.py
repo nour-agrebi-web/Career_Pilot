@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from typing import Iterable
 
 from pymongo import ASCENDING, DESCENDING
+
+from .enrich import detect_level, extract_skills
 from pymongo.database import Database
 
 ACTIVE, EXPIRED = "ACTIVE", "EXPIRED"     # valeurs de JobOfferStatus dans le backend
@@ -43,11 +45,14 @@ def to_doc(offer: dict) -> dict:
     return {
         "source": offer["source"], "source_id": offer["source_id"], "url": offer["url"],
         "title": offer.get("title"), "company": offer.get("company"),
-        "location": {"city": offer.get("city"), "country": offer.get("country")},
+        # Chaîne vide plutôt que None : le matching du backend appelle .strip() sur la ville.
+        "location": {"city": offer.get("city") or "", "country": offer.get("country") or ""},
         "type": offer.get("contract"), "work_mode": offer.get("work_mode"),
-        "description": offer.get("description"),
+        "description": offer.get("description") or "",
         "publication_date": _date(offer.get("published_at")), "expires_at": _date(offer.get("expires_at")),
-        "required_skills": [],      # le backend s'en sert ; à remplir par une extraction de compétences (voir rapport)
+        # Indispensables au score du backend (30 points compétences, 15 points niveau) : voir enrich.py.
+        "required_skills": extract_skills(offer.get("title"), offer.get("description")),
+        "level": detect_level(offer.get("title"), offer.get("description"), offer.get("contract")),
         "source_lastmod": offer.get("source_lastmod"),
         "detail_fetched": bool(offer.get("detail_fetched")),
         "content_hash": offer["content_hash"], "fingerprint": offer["fingerprint"],
@@ -60,12 +65,18 @@ def _merge(new: dict, old: dict) -> dict:
     for k, v in new.items():
         if k == "location":
             ol = old.get("location") or {}
-            out[k] = {kk: v.get(kk) or ol.get(kk) for kk in ("city", "country")}
+            out[k] = {kk: v.get(kk) or ol.get(kk) or "" for kk in ("city", "country")}
         elif v in (None, "", []) and old.get(k) not in (None, ""):
             out[k] = old[k]
         else:
             out[k] = v
     return out
+
+
+def _derive(doc: dict) -> dict:
+    doc["required_skills"] = extract_skills(doc.get("title"), doc.get("description"))
+    doc["level"] = detect_level(doc.get("title"), doc.get("description"), doc.get("type"))
+    return doc
 
 
 class Storage:
@@ -120,6 +131,7 @@ class Storage:
             return self.offers.insert_one(doc).inserted_id, "new"
 
         merged = _merge(doc, old)
+        _derive(merged)      # compétences et niveau recalculés sur le texte le plus complet connu
         merged["detail_fetched"] = doc["detail_fetched"] or bool(old.get("detail_fetched"))
         # Une simple ligne de liste ne remplace pas une offre déjà lue en détail.
         changed = doc["content_hash"] != old.get("content_hash") and (doc["detail_fetched"]
@@ -128,6 +140,23 @@ class Storage:
         merged.update(status=ACTIVE, last_seen=now)
         self.offers.update_one({"_id": old["_id"]}, {"$set": merged})
         return old["_id"], "updated" if changed else "unchanged"
+
+    def backfill_matching_fields(self) -> int:
+        """Complète les offres déjà en base avant l'ajout de required_skills / level, et remplace une ville
+        None par "" (sinon POST /matches/refresh du backend plante). Sans réseau ; ne touche que nos offres."""
+        todo = self.offers.find({**SCRAPED, "$or": [{"level": {"$exists": False}}, {"location.city": None},
+                                                     {"description": None}]})
+        n = 0
+        for doc in todo:
+            loc = doc.get("location") or {}
+            fix = _derive({"title": doc.get("title"), "description": doc.get("description") or "",
+                           "type": doc.get("type")})
+            fix.update(description=doc.get("description") or "",
+                       location={"city": loc.get("city") or "", "country": loc.get("country") or ""})
+            fix.pop("title"); fix.pop("type")
+            self.offers.update_one({"_id": doc["_id"]}, {"$set": fix})
+            n += 1
+        return n
 
     def mark_inactive(self, source: str, seen_ids: Iterable[str]) -> int:
         """Offres absentes de la liste complète du site : status EXPIRED (jamais supprimées)."""

@@ -319,5 +319,67 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(stats["offres_scorees"], 7)
 
 
+class EnrichTests(unittest.TestCase):
+    def test_competences_extraites(self):
+        from jobscraper.enrich import extract_skills
+        self.assertEqual(extract_skills("Tech Lead (C# .Net / Angular)", "Git, Docker, SQL Server"),
+                         ["C#", ".NET", "Angular", "Git", "Docker", "SQL", "SQL Server"])
+        self.assertNotIn("C", extract_skills("Développeur C#"))
+        self.assertIn("API REST", extract_skills("", "Conception d'API REST et de micro-services"))
+
+    def test_niveau_deduit(self):
+        from jobscraper.enrich import detect_level
+        self.assertEqual(detect_level("Stage PFE – Développeur Android", "", None), "stage")
+        self.assertEqual(detect_level("Tech Lead .NET", "", "emploi"), "confirme")
+        self.assertEqual(detect_level("Développeur Python", "Expérience : 1 à 3 ans", "emploi"), "junior")
+        self.assertEqual(detect_level("Développeur Python", "Expérience : 5 à 10 ans", "emploi"), "confirme")
+        self.assertIsNone(detect_level("Développeur Python", "", "emploi"))
+
+
+BACKEND_MATCHING = ROOT.parent / "backend" / "app" / "modules" / "offers" / "matching.py"
+
+
+@unittest.skipUnless(BACKEND_MATCHING.exists(), "backend absent")
+class BackendCompatTests(unittest.TestCase):
+    """Les offres écrites par le scraper doivent pouvoir sortir dans le fil de l'app (POST /matches/refresh)."""
+
+    @classmethod
+    def setUpClass(cls):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("backend_matching", BACKEND_MATCHING)
+        cls.matching = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.matching)
+
+    def setUp(self):
+        self.db = new_storage()
+        client, _ = make(FakeWeb(), self.db, delay=0)
+        run(self.db, client, PROFILE, SOURCES)
+        self.profile = {"level": "junior", "languages": [{"name": "Français"}],
+                        "skills": [{"name": n} for n in ["Python", "FastAPI", "MongoDB", "Git", "Docker", "Kotlin",
+                                                         "Android", "Java", "SQL"]],
+                        "experiences": [{"position": "Développeur Python"}], "educations": [], "domain": "Informatique"}
+        self.prefs = {"job_types": ["stage", "emploi"], "locations": [{"city": "Tunis"}], "threshold": 70}
+
+    def test_offre_pertinente_au_dessus_du_seuil_par_defaut(self):
+        offer = self.db.get_offer("Keejob", "900001")
+        self.assertEqual(offer["required_skills"][:3], ["Python", "FastAPI", "MongoDB"])
+        self.assertEqual(offer["level"], "junior")
+        result = self.matching.score(self.profile, self.prefs, offer)
+        self.assertIsNotNone(result)
+        self.assertGreaterEqual(result.score, 70)
+
+    def test_aucune_offre_ne_fait_planter_le_matching(self):
+        for offer in self.db.offers.find():
+            self.matching.score(self.profile, {**self.prefs, "job_types": ["stage", "emploi", None]}, offer)
+
+    def test_offres_anciennes_completees(self):
+        self.db.offers.update_many({}, {"$unset": {"level": ""}, "$set": {"required_skills": [],
+                                                                          "location.city": None}})
+        self.assertEqual(self.db.backfill_matching_fields(), 7)
+        offer = self.db.get_offer("Keejob", "900001")
+        self.assertEqual(offer["location"]["city"], "")
+        self.assertIn("Python", offer["required_skills"])
+
+
 if __name__ == "__main__":
     unittest.main()
