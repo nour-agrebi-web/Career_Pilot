@@ -28,8 +28,9 @@ STOPWORDS = {
 }
 
 
-def normalize(text: str) -> str:
-    text = unicodedata.normalize("NFKD", text.strip().lower())
+def normalize(text: str | None) -> str:
+    # None accepté : une offre collectée peut ne pas avoir de ville ou de description.
+    text = unicodedata.normalize("NFKD", (text or "").strip().lower())
     text = "".join(c for c in text if not unicodedata.combining(c))
     return SYNONYMS.get(text, text)
 
@@ -55,7 +56,7 @@ def eliminated(profile: dict, prefs: dict, offer: dict) -> str | None:
         return "type d'offre non souhaité"
     if offer.get("work_mode") != "teletravail" and prefs.get("locations"):
         cities = {normalize(loc["city"]) for loc in prefs["locations"]}
-        if normalize(offer.get("location", {}).get("city", "")) not in cities:
+        if normalize((offer.get("location") or {}).get("city")) not in cities:
             return "zone hors périmètre"
     if offer.get("work_mode") == "teletravail" and not prefs.get("remote_work", True) and prefs.get("locations"):
         return "télétravail non souhaité"
@@ -88,7 +89,7 @@ def score(profile: dict, prefs: dict, offer: dict) -> MatchResult | None:
     for e in profile.get("educations", []):
         profile_words |= keywords(e["degree"])
     profile_words |= keywords(profile.get("domain") or "")
-    offer_words = keywords(f"{offer['title']} {offer.get('description', '')} {' '.join(required)}")
+    offer_words = keywords(f"{offer['title']} {offer.get('description') or ''} {' '.join(required)}")
     common = profile_words & offer_words
     cosine = len(common) / math.sqrt(len(profile_words) * len(offer_words)) if profile_words and offer_words else 0
     semantic_ratio = min(1.0, cosine * 2.5)
@@ -105,7 +106,7 @@ def score(profile: dict, prefs: dict, offer: dict) -> MatchResult | None:
 
     # 4. Préférences (15) : type (déjà filtré), zone ou télétravail, langue.
     pref_points = 1.0  # le type est forcément souhaité après les filtres
-    city = offer.get("location", {}).get("city")
+    city = (offer.get("location") or {}).get("city")
     if offer.get("work_mode") == "teletravail":
         pref_points += 1.0
         reasons.append("Télétravail possible")
