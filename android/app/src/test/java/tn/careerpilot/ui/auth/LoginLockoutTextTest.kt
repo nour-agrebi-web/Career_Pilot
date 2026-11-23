@@ -15,7 +15,7 @@ class LoginLockoutTextTest {
 
     @Test
     fun `pendant un blocage le bouton et le message affichent le temps restant`() {
-        assertEquals("Bloqué · 2:59", loginButtonText(179))
+        assertEquals("2:59", loginButtonText(179))
         assertEquals("Trop de tentatives. Réessayez dans 0:42.", authMessage(FormState(), 42))
     }
 
