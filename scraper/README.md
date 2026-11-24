@@ -17,6 +17,15 @@ python -m jobscraper stats
 python -m unittest discover -s tests -t . # tests (réseau et MongoDB simulés)
 ```
 
+En continu (Windows ou Linux), jusqu'à Ctrl+C :
+
+```powershell
+cd scraper
+python -m jobscraper watch                    # cycles de 40 détails/site, 1 min entre deux cycles tant qu'il
+                                              # reste du retard, puis 30 min entre deux cycles
+python -m jobscraper watch --pause 15 --max-details 0   # variante : tout lire à chaque cycle, cycle toutes les 15 min
+```
+
 Options utiles de `run` : `--sources keejob`, `--max-details 40` (pages détail lues au plus par site et par
 exécution), `--delay 2` (secondes entre deux requêtes au même site), `-v` pour le journal.
 

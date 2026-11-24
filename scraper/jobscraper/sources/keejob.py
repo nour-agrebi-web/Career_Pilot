@@ -111,7 +111,9 @@ class Keejob(Source):
                 continue
             if section is None and (m := _META.match(line)):
                 meta[m.group(1).strip().lower()] = m.group(2).strip()
-            elif section == "description":
+            elif section is None or not section.startswith(("postuler", "footer", "candidature")):
+                # « ## Description », « ## Description du poste », « ## Missions »… ou pas de titre du tout :
+                # tout ce qui n'est ni métadonnée, ni candidature, ni pied de page est gardé.
                 desc_lines.append(line)
         description = re.sub(r"[*_`#>]", "", "\n".join(desc_lines)).strip()
         if not description:
