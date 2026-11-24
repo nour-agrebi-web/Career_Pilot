@@ -9,6 +9,7 @@ from app.db.mongo import get_db
 from app.modules.auth.deps import get_current_user
 from app.modules.offers.indexing import index_offers_quietly, semantic_scores
 from app.modules.offers.matching import score
+from app.modules.offers import search as offer_search
 from app.modules.preferences.router import get_preferences
 from app.modules.profile import service as profiles
 
@@ -63,8 +64,8 @@ def list_offers(type: str | None = None, q: str | None = None, _: dict = Depends
     offers = db.offers.find(query).sort("publication_date", DESCENDING)
     result = [offer_out(o) for o in offers]
     if q:
-        needle = q.lower()
-        result = [o for o in result if needle in f"{o['title']} {o['company']} {o['description']}".lower()]
+        # Mot entier, sans casse ni accents, et par domaine (« IT » ne trouve plus « littéraire »).
+        result = [o for o in result if offer_search.matches(o, q)]
     return result
 
 

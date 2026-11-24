@@ -1,8 +1,8 @@
 package tn.careerpilot.domain
 
 fun offer(type: String = "stage", title: String = "Développeur Kotlin", company: String = "Nexa", city: String = "Tunis",
-          date: String = "2026-10-01", skills: List<String> = listOf("Kotlin")) =
-    Offer("o-$title", title, company, city, "Tunisie", type, "hybride", "stage", "", skills, "TanitJobs", null, date)
+          date: String = "2026-10-01", skills: List<String> = listOf("Kotlin"), description: String = "") =
+    Offer("o-$title", title, company, city, "Tunisie", type, "hybride", "stage", description, skills, "TanitJobs", null, date)
 
 fun match(id: String, score: Int, type: String = "stage", status: MatchStatus = MatchStatus.PENDING,
           missing: List<String> = emptyList(), title: String = "Offre $id", date: String = "2026-10-01") =

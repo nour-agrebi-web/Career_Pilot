@@ -10,7 +10,6 @@ data class MatchFilter(
     val savedOnly: Boolean = false,
 ) {
     fun apply(matches: List<Match>, threshold: Int): List<Match> {
-        val needle = query.trim().lowercase()
         return matches
             .asSequence()
             .filter { it.status != MatchStatus.REJECTED }
@@ -18,7 +17,8 @@ data class MatchFilter(
             .filter { it.score >= threshold || it.isSaved }
             .filter { !savedOnly || it.isSaved }
             .filter { type == null || it.offer.type == type }
-            .filter { needle.isEmpty() || it.matchesQuery(needle) }
+            // Mot entier, sans casse ni accents, et par domaine (« IT » ne trouve plus « littéraire »).
+            .filter { OfferSearch.matches(it.offer, query) }
             .let { seq ->
                 when (sort) {
                     MatchSort.SCORE -> seq.sortedByDescending { it.score }
@@ -27,10 +27,4 @@ data class MatchFilter(
             }
             .toList()
     }
-
-    private fun Match.matchesQuery(needle: String): Boolean =
-        offer.title.lowercase().contains(needle) ||
-            offer.company.lowercase().contains(needle) ||
-            offer.city.orEmpty().lowercase().contains(needle) ||
-            offer.requiredSkills.any { it.lowercase().contains(needle) }
 }
