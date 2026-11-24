@@ -319,6 +319,64 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(stats["offres_scorees"], 7)
 
 
+class ContinuTests(unittest.TestCase):
+    def setUp(self):
+        self.web, self.db = FakeWeb(), new_storage()
+
+    def client(self):
+        return make(self.web, self.db, delay=0)[0]
+
+    def test_keejob_page_md_sans_titre_description(self):
+        body = (FIX / "keejob_900001.md").read_text(encoding="utf-8")
+        item = Keejob().parse_list((FIX / "keejob_llms_full.txt").read_text(encoding="utf-8"))[0]
+        for variant in (body.replace("## Description", "## Description du poste"),
+                        body.replace("## Description\n", "")):
+            offer = Keejob().parse_detail(item, variant)
+            self.assertIsNotNone(offer)
+            self.assertIn("FastAPI et MongoDB", offer["description"])
+            self.assertNotIn("Postulez", offer["description"])
+            self.assertNotIn("Entreprise", offer["description"])
+
+    def test_detail_404_offre_retiree_pas_erreur(self):
+        del self.web.pages["__keejob_900002"]
+        stats = run(self.db, self.client(), PROFILE, ["keejob"])
+        k = stats["sources"]["keejob"]
+        self.assertEqual((k["retirees"], k["erreurs"]), (1, 0))
+        self.assertEqual(self.db.get_offer("Keejob", "900002")["status"], "EXPIRED")
+
+    def test_page_illisible_abandonnee_apres_3_echecs(self):
+        self.web.set_page("__keejob_900003", "# Titre seul\n")
+        for _ in range(3):
+            k = run(self.db, self.client(), PROFILE, ["keejob"])["sources"]["keejob"]
+            self.assertEqual(k["erreurs"], 1)
+            self.assertIn("description introuvable", k["detail_erreurs"][0]["raison"])
+        self.web.log.clear()
+        k = run(self.db, self.client(), PROFILE, ["keejob"])["sources"]["keejob"]
+        self.assertEqual((k["erreurs"], k["abandonnees"]), (0, 1))
+        self.assertEqual(self.web.requests_to("900003"), 0)       # plus aucune requête vers cette page
+
+    def test_max_details_zero_sans_limite(self):
+        k = run(self.db, self.client(), PROFILE, ["keejob"], max_details=0)["sources"]["keejob"]
+        self.assertEqual((k["details_lus"], k["details_en_attente"]), (4, 0))
+
+    def test_boucle_rattrapage_puis_pause_longue_puis_ctrl_c(self):
+        from jobscraper.pipeline import watch
+        sleeps, lines = [], []
+
+        def sleep(seconds):
+            sleeps.append(seconds)
+            if len(sleeps) == 3:
+                raise KeyboardInterrupt          # l'utilisateur appuie sur Ctrl+C pendant la 3e pause
+
+        cycles = watch(self.db, self.client, lambda: PROFILE, SOURCES, max_details=2,
+                       pause_min=30, catchup_min=1, sleep=sleep, report=lines.append)
+        self.assertEqual(cycles, 3)
+        self.assertEqual(sleeps, [60, 1800, 1800])  # 1 cycle de rattrapage (1 min) puis pauses normales (30 min)
+        self.assertEqual(self.db.offers.count_documents({"detail_fetched": False}), 0)
+        self.assertIn("Arrêt demandé", lines[-1])
+        self.assertIn("cycle 1", lines[0])
+
+
 class EnrichTests(unittest.TestCase):
     def test_competences_extraites(self):
         from jobscraper.enrich import extract_skills

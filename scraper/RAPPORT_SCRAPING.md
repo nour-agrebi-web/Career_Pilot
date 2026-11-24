@@ -13,7 +13,7 @@
 - **Écartées** : LinkedIn et Indeed (leurs conditions interdisent le scraping), France Travail (son API Offres n'est plus ouverte au public).
 - Optimisations : 1 requête pour lister tout un site, requêtes conditionnelles (réponse 304 sans contenu), cache HTTP, déduplication par URL et par empreinte, pause de 2 s entre deux requêtes au même site, plafond de pages lues par exécution, respect automatique de robots.txt.
 - **Score de 0 à 100** par mots-clés pondérés. **Le score de chaque offre est stocké, même sous le seuil** : le seuil est un simple filtre de lecture. Baisser le seuil affiche des offres déjà en base, sans requête réseau ni recalcul.
-- **33 tests automatiques, tous verts** (MongoDB simulé avec mongomock, comme dans les tests du backend). Sur les données simulées, la 1re exécution envoie 11 requêtes. La 2e, sans changement côté sites, en envoie 4, toutes répondues par « 304 Non modifié », et ne recalcule aucun score.
+- **40 tests automatiques, tous verts** (MongoDB simulé avec mongomock, comme dans les tests du backend). Sur les données simulées, la 1re exécution envoie 11 requêtes. La 2e, sans changement côté sites, en envoie 4, toutes répondues par « 304 Non modifié », et ne recalcule aucun score.
 
 ---
 
@@ -259,6 +259,22 @@ Correctif (`jobscraper/enrich.py`) :
 - Les offres déjà en base sont complétées automatiquement au début de chaque `run`, sans réseau.
 
 5 tests ont été ajoutés, dont 3 qui lancent le **vrai** `score()` du backend sur les offres du scraper. Ils vérifient que l'offre « Développeur Python » atteint au moins 70 et qu'aucune offre ne fait planter le matching.
+
+## 10 ter. Mode continu (24/11)
+
+`python -m jobscraper watch` enchaîne les cycles sans fin (liste, détails, scores), jusqu'à Ctrl+C :
+- tant qu'il reste des pages détail en attente, le cycle suivant démarre après `--rattrapage` minute(s) (1 par défaut). Le retard de la 1re collecte se rattrape donc tout seul, sans attendre la planification ;
+- une fois tout à jour, il attend `--pause` minutes (30 par défaut) avant de revérifier les listes, qui répondent alors le plus souvent « 304 Non modifié » ;
+- la politesse reste active à chaque cycle : robots.txt relu, 2 s minimum entre deux requêtes au même site (`--delay` ne descend pas sous 1 s), requêtes conditionnelles ;
+- `--max-details 0` retire la limite de pages par cycle ;
+- le profil est relu à chaque cycle ;
+- **arrêt** : Ctrl+C dans la console (ou fermer la fenêtre). Ce qui a déjà été enregistré reste en base, et la prochaine exécution reprend là où elle s'était arrêtée.
+
+Erreurs de pages détail, corrigées le même jour :
+- une page détail qui répond 404 ou 410 (offre retirée entre la liste et le détail) n'est plus comptée comme erreur : l'offre passe en `EXPIRED` ;
+- la lecture des pages `.md` de Keejob accepte maintenant les variantes de titre (« Description du poste »…) ou l'absence de titre de section ;
+- une page qui échoue 3 fois est abandonnée (collection `scraper_failures`), au lieu d'être redemandée à chaque cycle ;
+- le résultat d'un `run` liste désormais les pages en erreur avec leur raison (`detail_erreurs`).
 
 ## 11. Suite logique pour l'intégration dans le backend
 

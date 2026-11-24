@@ -14,7 +14,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Iterable
 
-from pymongo import ASCENDING, DESCENDING
+from pymongo import ASCENDING, DESCENDING, ReturnDocument
 
 from .enrich import detect_level, extract_skills
 from pymongo.database import Database
@@ -86,6 +86,7 @@ class Storage:
         self.scores = db.offer_scores
         self.cache = db.scraper_http_cache
         self.runs = db.scraper_runs
+        self.failures = db.scraper_failures     # pages détail en échec : abandonnées après MAX_FAILURES essais
         self.create_indexes()
 
     def create_indexes(self) -> None:
@@ -96,6 +97,7 @@ class Storage:
         self.scores.create_index([("offer_id", ASCENDING), ("profile_hash", ASCENDING)], unique=True)
         self.scores.create_index([("profile_hash", ASCENDING), ("score", DESCENDING)])
         self.cache.create_index("url", unique=True)
+        self.failures.create_index("url", unique=True)
 
     def close(self) -> None:
         self.db.client.close()
@@ -157,6 +159,25 @@ class Storage:
             self.offers.update_one({"_id": doc["_id"]}, {"$set": fix})
             n += 1
         return n
+
+    MAX_FAILURES = 3
+
+    def record_failure(self, url: str, reason: str) -> int:
+        doc = self.failures.find_one_and_update(
+            {"url": url}, {"$inc": {"count": 1}, "$set": {"reason": reason, "last_at": _now()}},
+            upsert=True, return_document=ReturnDocument.AFTER)
+        return doc["count"]
+
+    def given_up(self, url: str) -> bool:
+        doc = self.failures.find_one({"url": url}, {"count": 1})
+        return bool(doc and doc["count"] >= self.MAX_FAILURES)
+
+    def clear_failure(self, url: str) -> None:
+        self.failures.delete_one({"url": url})
+
+    def expire(self, source: str, source_id: str) -> None:
+        """Page détail introuvable (404/410) : l'offre a été retirée du site."""
+        self.offers.update_one({"source": source, "source_id": source_id, **SCRAPED}, {"$set": {"status": EXPIRED}})
 
     def mark_inactive(self, source: str, seen_ids: Iterable[str]) -> int:
         """Offres absentes de la liste complète du site : status EXPIRED (jamais supprimées)."""
