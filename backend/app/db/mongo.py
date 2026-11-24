@@ -3,7 +3,9 @@ from pymongo.database import Database
 from app.core.config import settings
 
 # Un seul client pour toute l'application : il gère lui-même son pool de connexions.
-client = MongoClient(settings.mongodb_url, tz_aware=True)
+# serverSelectionTimeoutMS : si MongoDB est arrêté, une requête échoue après 5 s (au lieu de 30 s par
+# défaut, aussi long que le délai de lecture de l'app Android, qui affichait alors un simple « timeout »).
+client = MongoClient(settings.mongodb_url, tz_aware=True, serverSelectionTimeoutMS=settings.mongodb_timeout_ms)
 
 def get_db() -> Database:
     return client[settings.mongodb_db]
