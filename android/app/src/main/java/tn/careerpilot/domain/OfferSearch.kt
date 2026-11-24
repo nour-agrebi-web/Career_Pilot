@@ -17,7 +17,10 @@ import java.text.Normalizer
  */
 object OfferSearch {
 
-    private data class Domain(val aliases: Set<String>, val keywords: List<String>)
+    private class Domain(val aliases: Set<String>, rawKeywords: List<String>) {
+        /** Mots-clés déjà normalisés, calculés une fois et non à chaque frappe. */
+        val keywords: List<String> by lazy { rawKeywords.map { tokens(it).joinToString(" ") } }
+    }
 
     private val AI_KEYWORDS = listOf(
         "ia", "ai", "intelligence artificielle", "artificial intelligence", "machine learning", "deep learning",
@@ -124,7 +127,7 @@ object OfferSearch {
             return all.any { it == word || (word.length >= 4 && it.startsWith(word)) }
         }
 
-        fun hasAny(keywords: List<String>): Boolean = keywords.any { containsPhrase(tokens(it).joinToString(" ")) }
+        fun hasAny(keywords: List<String>): Boolean = keywords.any { containsPhrase(it) }
 
         private fun containsPhrase(phrase: String): Boolean =
             phrase.isNotEmpty() && (" $phrase " in proseStrict || " $phrase " in skills)

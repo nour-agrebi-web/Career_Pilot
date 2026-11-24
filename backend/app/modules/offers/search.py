@@ -86,7 +86,11 @@ def _strict_tokens(text: str) -> list[str]:
 
 
 def _domain_of(normalized: str) -> list[str] | None:
-    return next((keywords for aliases, keywords in DOMAINS if normalized in aliases), None)
+    return next((keywords for aliases, keywords in _NORMALIZED_DOMAINS if normalized in aliases), None)
+
+
+# Mots-clés normalisés une seule fois.
+_NORMALIZED_DOMAINS = [(aliases, [" ".join(tokens(k)) for k in keywords]) for aliases, keywords in DOMAINS]
 
 
 class _OfferText:
@@ -108,7 +112,7 @@ class _OfferText:
         return any(w == word or (len(word) >= 4 and w.startswith(word)) for w in self.words)
 
     def has_any(self, keywords: list[str]) -> bool:
-        return any(self._contains(" ".join(tokens(k))) for k in keywords)
+        return any(self._contains(k) for k in keywords)
 
 
 def matches(offer: dict, query: str) -> bool:
