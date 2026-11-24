@@ -116,6 +116,7 @@ def run(storage: Storage, client, profile: dict, source_names: list[str], max_de
     run_id = storage.start_run()
     t0 = time.time()
     stats = {"offres_completees": storage.backfill_matching_fields(),
+             "categories_rattrapees": storage.backfill_categories(),
              "sources": collect(storage, client, source_names, max_details)}
     stats["score"] = score_all(storage, profile)
     stats["duree_s"] = round(time.time() - t0, 1)

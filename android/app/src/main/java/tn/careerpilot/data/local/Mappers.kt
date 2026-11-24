@@ -95,6 +95,8 @@ fun MatchDto.toEntity() = MatchEntity(
     source = offer.source,
     url = offer.url,
     publicationDate = offer.publicationDate,
+    categories = offer.categories.orEmpty(),
+    hasCategories = offer.categories != null,
 )
 
 fun MatchEntity.toDomain() = Match(
@@ -109,5 +111,6 @@ fun MatchEntity.toDomain() = Match(
         id = offerId, title = title, company = company, city = city, country = country, type = type,
         workMode = workMode, level = offerLevel, description = description, requiredSkills = requiredSkills,
         source = source, url = url, publicationDate = publicationDate,
+        categories = categories.takeIf { hasCategories },
     ),
 )

@@ -128,6 +128,9 @@ data class OfferDto(
     @SerializedName("required_skills") val requiredSkills: List<String>?,
     @SerializedName("publication_date") val publicationDate: String?,
     val url: String?,
+    /** Catégorie principale et liste complète ; absentes (null) si l'offre n'est pas encore catégorisée. */
+    val category: String? = null,
+    val categories: List<String>? = null,
 )
 
 data class BreakdownDto(val semantic: Int, val skills: Int, val level: Int, val preferences: Int)

@@ -3,7 +3,8 @@
 Collections :
   offers             partagée avec le backend. Mêmes champs que backend/seeds/offers_dev.py
                      (source, source_id, title, company, location {city, country}, type, work_mode,
-                     description, publication_date, url, status), plus les champs techniques du scraper
+                     description, publication_date, url, status), la catégorie (category, categories,
+                     category_origin, source_categories : voir categories.py), plus les champs techniques du scraper
                      (content_hash, fingerprint, source_lastmod, detail_fetched, duplicate_of, first_seen, last_seen).
   offer_scores       un score par offre ET par version du profil, stocké même sous le seuil.
   scraper_http_cache dernier contenu reçu par URL, avec ETag / Last-Modified (requêtes conditionnelles).
@@ -16,6 +17,9 @@ from typing import Iterable
 
 from pymongo import ASCENDING, DESCENDING, ReturnDocument
 
+import re
+
+from .categories import categorize, split_labels
 from .enrich import detect_level, extract_skills
 from pymongo.database import Database
 
@@ -53,6 +57,8 @@ def to_doc(offer: dict) -> dict:
         # Indispensables au score du backend (30 points compétences, 15 points niveau) : voir enrich.py.
         "required_skills": extract_skills(offer.get("title"), offer.get("description")),
         "level": detect_level(offer.get("title"), offer.get("description"), offer.get("contract")),
+        "source_categories": offer.get("source_categories") or [],
+        **categorize(offer.get("source_categories"), offer.get("title"), offer.get("description")),
         "source_lastmod": offer.get("source_lastmod"),
         "detail_fetched": bool(offer.get("detail_fetched")),
         "content_hash": offer["content_hash"], "fingerprint": offer["fingerprint"],
@@ -76,7 +82,12 @@ def _merge(new: dict, old: dict) -> dict:
 def _derive(doc: dict) -> dict:
     doc["required_skills"] = extract_skills(doc.get("title"), doc.get("description"))
     doc["level"] = detect_level(doc.get("title"), doc.get("description"), doc.get("type"))
+    doc.update(categorize(doc.get("source_categories"), doc.get("title"), doc.get("description")))
     return doc
+
+
+_KEEJOB_METIERS = re.compile(r"^M[ée]tiers?\s*:\s*(.+)$", re.M)
+_TANIT_ID = re.compile(r"/job/(\d+)/")
 
 
 class Storage:
@@ -160,6 +171,29 @@ class Storage:
             n += 1
         return n
 
+    def backfill_categories(self, all_offers: bool = False) -> dict:
+        """Rattrape la catégorie des offres déjà en base (sans réseau). Rubrique du site retrouvée :
+        - Keejob : ligne « Métiers : … » déjà recopiée dans la description ;
+        - Tanitjobs : page de l'offre gardée dans le cache HTTP du scraper (scraper_http_cache).
+        Sinon la catégorie est déduite du texte. `all_offers` recalcule aussi les offres déjà catégorisées."""
+        from .sources.tanitjobs import find_jobposting, source_categories
+
+        query = dict(SCRAPED) if all_offers else {**SCRAPED, "categories": {"$exists": False}}
+        stats = {"site": 0, "deduite": 0, "sans_categorie": 0}
+        for doc in self.offers.find(query):
+            labels = doc.get("source_categories") or []
+            if not labels and (m := _KEEJOB_METIERS.search(doc.get("description") or "")):
+                labels = split_labels(m.group(1))
+            if not labels and (m := _TANIT_ID.search(doc.get("url") or "")):
+                page = self.cache_get(doc["url"]) or self.cache.find_one(
+                    {"url": {"$regex": rf"tanitjobs\.com/job/{m.group(1)}/"}})
+                if page and page.get("body"):
+                    labels = source_categories(find_jobposting(page["body"]))
+            fix = {"source_categories": labels, **categorize(labels, doc.get("title"), doc.get("description"))}
+            self.offers.update_one({"_id": doc["_id"]}, {"$set": fix})
+            stats[fix["category_origin"] or "sans_categorie"] += 1
+        return stats
+
     MAX_FAILURES = 3
 
     def record_failure(self, url: str, reason: str) -> int:
@@ -234,6 +268,14 @@ class Storage:
                         "detail": {"$sum": {"$cond": ["$detail_fetched", 1, 0]}},
                         "actives": {"$sum": {"$cond": [{"$eq": ["$status", ACTIVE]}, 1, 0]}}}},
             {"$sort": {"_id": 1}}]))
+
+    def category_counts(self):
+        """Nombre d'offres actives par catégorie (une offre compte dans chacune de ses catégories)."""
+        return list(self.offers.aggregate([
+            {"$match": {**SCRAPED, "status": ACTIVE}},
+            {"$unwind": {"path": "$categories", "preserveNullAndEmptyArrays": True}},
+            {"$group": {"_id": "$categories", "n": {"$sum": 1}}},
+            {"$sort": {"n": -1}}]))
 
     # ---------- exécutions ----------
     def start_run(self):

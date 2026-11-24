@@ -9,12 +9,13 @@ from app.db.mongo import get_db
 from app.modules.auth.deps import get_current_user
 from app.modules.offers.indexing import index_offers_quietly, semantic_scores
 from app.modules.offers.matching import score
+from app.modules.offers import search as offer_search
 from app.modules.preferences.router import get_preferences
 from app.modules.profile import service as profiles
 
 # Collection "offers" : { _id, source, source_id, title, company, location {city, country}, type,
 #   work_mode (sur_site | hybride | teletravail), level, language, description, required_skills[],
-#   publication_date, url, status (JobOfferStatus) }
+#   publication_date, url, status (JobOfferStatus), category, categories[] (écrits par le scraper) }
 # Collection "matches" : { _id, user_id, offer_id, score, breakdown {semantic, skills, level, preferences},
 #   reasons[], missing_skills[], status (MatchStatus), notified, created_at, updated_at }
 
@@ -41,6 +42,8 @@ def offer_out(offer: dict) -> dict:
         "level": offer.get("level"), "description": offer.get("description", ""),
         "required_skills": offer.get("required_skills", []), "publication_date": offer.get("publication_date"),
         "url": offer.get("url"), "status": offer.get("status", "ACTIVE"),
+        # Catégorie lue sur le site ou déduite par le scraper ; None/absent : offre pas encore catégorisée.
+        "category": offer.get("category"), "categories": offer.get("categories"),
     }
 
 
@@ -55,16 +58,25 @@ def match_out(match: dict, offer: dict) -> dict:
 # --- Offres (lecture seule pour le candidat : elles viennent des connecteurs) ---
 
 @router.get("/offers")
-def list_offers(type: str | None = None, q: str | None = None, _: dict = Depends(get_current_user),
-                db: Database = Depends(get_db)):
+def list_offers(type: str | None = None, q: str | None = None, category: str | None = None,
+                _: dict = Depends(get_current_user), db: Database = Depends(get_db)):
     query: dict = {"status": "ACTIVE"}
     if type:
         query["type"] = type
+    if category:
+        # « IA », « ia », « Développement », « developpement », « informatique »… -> nom canonique.
+        name = offer_search.category_of(category)
+        if name is None:
+            raise HTTPException(422, "Catégorie inconnue : " + ", ".join(n for n, _, _ in offer_search.DOMAINS) + ".")
+        # Catégorie enregistrée par le scraper ; les offres sans ce champ passent par les mots-clés.
+        query["$or"] = [{"categories": name}, {"categories": {"$exists": False}}, {"categories": None}]
     offers = db.offers.find(query).sort("publication_date", DESCENDING)
     result = [offer_out(o) for o in offers]
+    if category:
+        result = [o for o in result if offer_search.in_category(o, name)]
     if q:
-        needle = q.lower()
-        result = [o for o in result if needle in f"{o['title']} {o['company']} {o['description']}".lower()]
+        # Mot entier, sans casse ni accents, et par domaine (« IT » ne trouve plus « littéraire »).
+        result = [o for o in result if offer_search.matches(o, q)]
     return result
 
 

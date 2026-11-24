@@ -14,6 +14,7 @@ import json
 import re
 import xml.etree.ElementTree as ET
 
+from ..categories import split_labels
 from ..normalize import contract_type, strip_html, work_mode
 from .base import Listing, Source
 
@@ -45,7 +46,7 @@ class Tanitjobs(Source):
         return items
 
     def parse_detail(self, item: dict, body: str) -> dict | None:
-        job = _find_jobposting(body)
+        job = find_jobposting(body)
         if job:
             org = job.get("hiringOrganization") or {}
             loc = job.get("jobLocation") or {}
@@ -65,6 +66,8 @@ class Tanitjobs(Source):
                 "published_at": (job.get("datePosted") or "")[:10] or None,
                 "expires_at": (job.get("validThrough") or "")[:10] or None,
                 "description": desc,
+                # Rubrique du site (« Informatique », « Design, Marketing »…) : sert à la catégorie de l'offre.
+                "source_categories": source_categories(job),
                 "detail_fetched": True,
             }
         # Secours si la page n'a pas de JSON-LD : balises meta standard (titre et résumé seulement).
@@ -75,7 +78,14 @@ class Tanitjobs(Source):
                 _meta(body, "og:description"), "country": "Tunisie", "detail_fetched": True}
 
 
-def _find_jobposting(body: str) -> dict | None:
+def source_categories(job: dict | None) -> list[str]:
+    """Rubrique(s) Tanitjobs : champ occupationalCategory (sinon industry) du JobPosting."""
+    if not job:
+        return []
+    return split_labels(job.get("occupationalCategory") or job.get("industry"))
+
+
+def find_jobposting(body: str) -> dict | None:
     for block in _LD.findall(body):
         try:
             data = json.loads(block.strip())

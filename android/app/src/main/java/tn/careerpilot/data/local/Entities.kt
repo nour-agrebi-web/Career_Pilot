@@ -97,4 +97,7 @@ data class MatchEntity(
     val source: String,
     val url: String?,
     val publicationDate: String?,
+    val categories: List<String> = emptyList(),
+    /** false : l'API n'a pas envoyé de catégories (offre pas encore catégorisée), à distinguer d'une liste vide. */
+    val hasCategories: Boolean = false,
 )

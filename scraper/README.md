@@ -37,6 +37,18 @@ Planification (toutes les 3 heures, de 7 h à 22 h) :
 
 Sous Windows : Planificateur de tâches, action `python -m jobscraper run`, dossier de départ = ce dossier.
 
+Catégorie des offres : chaque offre reçoit `category` (principale) et `categories` (IT, IA, Développement,
+Mécanique, Électrique, Finance, Marketing, Commercial, RH). Elles viennent de la rubrique du site (« Métiers » sur
+Keejob, `occupationalCategory` sur Tanitjobs) ; à défaut, elles sont déduites du titre (`category_origin` vaut
+`site` ou `deduite`). Pour les offres enregistrées avant cet ajout, hors ligne :
+
+```bash
+python -m jobscraper categories          # offres sans catégorie (fait aussi au début de chaque run)
+python -m jobscraper categories --toutes # tout recalculer
+```
+
+L'API filtre ensuite avec `GET /offers?category=IA`.
+
 Vectorisation : le scraper n'utilise ni Ollama ni Qdrant. Le backend vectorise les offres nouvelles ou modifiées
 au prochain `POST /matches/refresh`, ou avec `python -m app.modules.offers.indexing` (dossier `backend`).
 

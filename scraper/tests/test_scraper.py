@@ -453,5 +453,119 @@ class BackendCompatTests(unittest.TestCase):
         self.assertIn("Python", offer["required_skills"])
 
 
+class CategoryTests(unittest.TestCase):
+    """Catégorie de l'offre : rubrique du site d'abord, sinon déduite du texte."""
+
+    def test_keejob_rubrique_metiers_lue(self):
+        item = Keejob().parse_list((FIX / "keejob_llms_full.txt").read_text(encoding="utf-8"))[0]
+        offer = Keejob().parse_detail(item, (FIX / "keejob_900001.md").read_text(encoding="utf-8"))
+        self.assertEqual(offer["source_categories"], ["Développement informatique"])
+
+    def test_keejob_metiers_repetes_dedoublonnes(self):
+        from jobscraper.categories import split_labels
+        self.assertEqual(split_labels("Ingénieur Informatique, Ingénieur Informatique, Responsable Informatique"),
+                         ["Ingénieur Informatique", "Responsable Informatique"])
+
+    def test_tanitjobs_occupational_category_lue(self):
+        item = {"source": "TanitJobs", "source_id": "700001", "url": "https://www.tanitjobs.com/job/700001/x/"}
+        offer = Tanitjobs().parse_detail(item, (FIX / "tanitjobs_700001.html").read_text(encoding="utf-8"))
+        self.assertEqual(offer["source_categories"], ["Informatique", "Technologie de l'information"])
+        offer = Tanitjobs().parse_detail(item, (FIX / "tanitjobs_700002.html").read_text(encoding="utf-8"))
+        self.assertEqual(offer["source_categories"], [])
+
+    def test_rubriques_ramenees_aux_categories(self):
+        from jobscraper.categories import categorize
+        self.assertEqual(categorize(["Développement informatique"], "Développeur Python")["categories"],
+                         ["Développement", "IT"])
+        # Rubrique large + titre précis : IA ajoutée, origine toujours « site ».
+        r = categorize(["Informatique"], "Ingénieur Machine Learning")
+        self.assertEqual((r["category"], r["categories"], r["category_origin"]), ("IA", ["IA", "IT"], "site"))
+        self.assertEqual(categorize(["Commerce de détail"], "Assistant(e) commercial(e)")["categories"],
+                         ["Commercial"])
+        self.assertEqual(categorize(["Technicien De Maintenance Électromécanique"], "Technicien")["categories"],
+                         ["Mécanique", "Électrique"])
+        self.assertEqual(categorize(["Comptabilité"], "Auditeur financier")["category"], "Finance")
+
+    def test_rubrique_hors_categories_deduite_du_titre(self):
+        from jobscraper.categories import categorize
+        r = categorize(["Industrie"], "Technicien en électricité industrielle", "SQL apprécié")
+        self.assertEqual((r["categories"], r["category_origin"]), (["Électrique"], "deduite"))
+        # Rubrique sans équivalent et titre muet : pas de catégorie, la description n'est pas utilisée.
+        r = categorize(["Centre d'appels"], "Conseillers Clients Germanophones", "un peu de SQL apprécié")
+        self.assertEqual((r["category"], r["categories"], r["category_origin"]), (None, [], None))
+
+    def test_sans_rubrique_deduite_titre_puis_description(self):
+        from jobscraper.categories import categorize
+        self.assertEqual(categorize([], "Stage PFE – Développeur Android Kotlin")["categories"],
+                         ["Développement", "IT"])
+        r = categorize(None, "Chargé de projet", "Projet de deep learning en vision par ordinateur.")
+        self.assertEqual((r["category"], r["category_origin"]), ("IA", "deduite"))
+        # Mots vagues d'une description (« bonne communication ») ignorés ; « it » anglais ignoré.
+        self.assertEqual(categorize([], "Assistant de direction", "Bonne communication, it is a plus")["categories"], [])
+        self.assertEqual(categorize([], "Ingénieur support IT")["categories"], ["IT"])
+
+    def test_categorie_enregistree_en_base(self):
+        db = new_storage()
+        client, _ = make(FakeWeb(), db, delay=0)
+        run(db, client, PROFILE, SOURCES)
+        k1 = db.get_offer("Keejob", "900001")
+        self.assertEqual((k1["category"], k1["categories"], k1["category_origin"]),
+                         ("Développement", ["Développement", "IT"], "site"))
+        self.assertEqual(k1["source_categories"], ["Développement informatique"])
+        self.assertEqual(db.get_offer("Keejob", "900002")["categories"], [])
+        t1 = db.get_offer("TanitJobs", "700001")
+        self.assertEqual((t1["categories"], t1["category_origin"]), (["Développement", "IT"], "site"))
+        t2 = db.get_offer("TanitJobs", "700002")      # pas de rubrique : déduite (« Data Analyst »)
+        self.assertEqual((t2["categories"], t2["category_origin"]), (["IT"], "deduite"))
+        self.assertEqual(db.get_offer("TanitJobs", "700003")["category"], "Finance")   # « Comptable »
+
+    def test_relecture_liste_garde_la_rubrique(self):
+        db = new_storage()
+        client, _ = make(FakeWeb(), db, delay=0)
+        run(db, client, PROFILE, SOURCES)
+        client, _ = make(FakeWeb(), db, delay=0)
+        run(db, client, PROFILE, SOURCES)
+        k1 = db.get_offer("Keejob", "900001")
+        self.assertEqual((k1["category_origin"], k1["source_categories"]), ("site", ["Développement informatique"]))
+
+    def test_rattrapage_des_offres_deja_en_base(self):
+        db = new_storage()
+        client, _ = make(FakeWeb(), db, delay=0)
+        run(db, client, PROFILE, SOURCES)
+        # Offres enregistrées avant l'ajout de la catégorie.
+        db.offers.update_many({}, {"$unset": {"category": "", "categories": "", "category_origin": "",
+                                              "source_categories": ""}})
+        stats = db.backfill_categories()
+        self.assertEqual(stats, {"site": 2, "deduite": 4, "sans_categorie": 1})
+        # Keejob : « Métiers » relu dans la description ; Tanitjobs : page relue dans le cache HTTP, sans réseau.
+        self.assertEqual(db.get_offer("Keejob", "900001")["category_origin"], "site")
+        t1 = db.get_offer("TanitJobs", "700001")
+        self.assertEqual((t1["source_categories"][0], t1["category_origin"]), ("Informatique", "site"))
+        self.assertEqual(db.backfill_categories(), {"site": 0, "deduite": 0, "sans_categorie": 0})
+        self.assertEqual(sum(db.backfill_categories(all_offers=True).values()), 7)
+
+    def test_commande_categories(self):
+        import contextlib
+        import io
+        from jobscraper.__main__ import main
+        mongo = mongomock.MongoClient(tz_aware=True)
+        storage = Storage(mongo["careerpilot"])
+        client, _ = make(FakeWeb(), storage, delay=0)
+        run(storage, client, PROFILE, SOURCES)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(main(["--profile", str(ROOT / "profile.example.json"), "categories", "--toutes"],
+                                  mongo_client=mongo), 0)
+        self.assertIn("7 offre(s) traitée(s)", out.getvalue())
+        self.assertIn("IT : ", out.getvalue())
+
+    def test_normalisation_du_nom_de_categorie(self):
+        from jobscraper.categories import normalize_category
+        self.assertEqual(normalize_category("developpement"), "Développement")
+        self.assertEqual(normalize_category("ia"), "IA")
+        self.assertEqual(normalize_category("MECANIQUE"), "Mécanique")
+        self.assertIsNone(normalize_category("cuisine"))
+
+
 if __name__ == "__main__":
     unittest.main()
