@@ -89,6 +89,17 @@ class MatchRepositoryTest {
     }
 
     @Test
+    fun `matching en echec, les offres deja trouvees sont quand meme affichees`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(500).setBody("""{"detail":"Ollama trop lent"}"""))
+        server.enqueue(MockResponse().setBody("[$matchJson]"))
+
+        val result = repository.refresh(runMatching = true)
+
+        assertEquals(ApiResult.Error("Ollama trop lent", 500), result)
+        assertEquals(86, repository.matches.first().single().score)
+    }
+
+    @Test
     fun `erreur serveur remontee avec le message de l API`() = runTest {
         server.enqueue(MockResponse().setResponseCode(500).setBody("""{"detail":"Base indisponible"}"""))
 

@@ -57,9 +57,10 @@ def point_id(offer_id) -> str:
     return str(uuid.uuid5(_NAMESPACE, str(offer_id)))
 
 
-def index_offers(db: Database, cfg=settings) -> dict:
-    """Vectorise les offres actives nouvelles ou modifiées, retire de Qdrant les offres expirées.
-    Lève une exception si Ollama ou Qdrant est indisponible (les offres déjà traitées restent enregistrées)."""
+def index_offers(db: Database, cfg=settings, limit: int | None = None) -> dict:
+    """Vectorise les offres actives nouvelles ou modifiées (au plus `limit`, les plus récentes d'abord),
+    retire de Qdrant les offres expirées. Lève une exception si Ollama ou Qdrant est indisponible
+    (les offres déjà traitées restent enregistrées)."""
     model = cfg.ollama_embed_model
     todo, stale, unchanged = [], [], 0
     for offer in db.offers.find({}, {"title": 1, "description": 1, "required_skills": 1, "level": 1,
@@ -73,6 +74,12 @@ def index_offers(db: Database, cfg=settings) -> dict:
             unchanged += 1
         else:
             todo.append((offer, fp))
+
+    remaining = 0
+    if limit is not None and len(todo) > limit:
+        todo.sort(key=lambda t: str(t[0]["_id"]), reverse=True)   # ObjectId croissant = plus récent en dernier
+        remaining = len(todo) - limit
+        todo = todo[:limit]
 
     client = store.get_client(cfg)
     if stale:
@@ -92,7 +99,7 @@ def index_offers(db: Database, cfg=settings) -> dict:
         for o, fp in batch:  # noté après l'écriture dans Qdrant : un échec en cours de route sera repris
             db.offers.update_one({"_id": o["_id"]}, {"$set": {"vector_index": {
                 "fingerprint": fp, "model": model, "indexed_at": now}}})
-    return {"vectorisees": len(todo), "inchangees": unchanged, "retirees": len(stale)}
+    return {"vectorisees": len(todo), "inchangees": unchanged, "retirees": len(stale), "restantes": remaining}
 
 
 def profile_query(profile: dict) -> str:
@@ -113,17 +120,30 @@ def similarities(profile: dict, cfg=settings) -> dict[str, float]:
     return {h.payload["offer_id"]: h.score for h in hits}
 
 
-def semantic_scores(db: Database, profile: dict, cfg=settings) -> dict[str, float] | None:
-    """Vectorise les offres qui en ont besoin puis calcule les similarités. None si Ollama ou Qdrant
-    est indisponible : le matching utilise alors le recouvrement de mots-clés."""
+def semantic_scores(db: Database, profile: dict, cfg=settings, max_new: int | None = None,
+                    stats_out: dict | None = None) -> dict[str, float] | None:
+    """Vectorise les offres qui en ont besoin (au plus `max_new`) puis calcule les similarités. None si Ollama
+    ou Qdrant est indisponible : le matching utilise alors le recouvrement de mots-clés. Une offre pas encore
+    vectorisée est absente du résultat et passe, elle aussi, par les mots-clés."""
     try:
-        stats = index_offers(db, cfg)
+        stats = index_offers(db, cfg, limit=max_new)
+        if stats_out is not None:
+            stats_out.update(stats)
         if stats["vectorisees"] or stats["retirees"]:
             logger.info("Offres vectorisées : %s", stats)
         return similarities(profile, cfg)
     except Exception as e:  # Ollama éteint, modèle absent, dossier Qdrant verrouillé...
         logger.warning("Similarité sémantique indisponible, repli sur les mots-clés : %s", e)
         return None
+
+
+def index_offers_quietly(db: Database, cfg=settings) -> None:
+    """Pour une tâche de fond : vectorise tout ce qui reste, sans lever d'exception."""
+    try:
+        stats = index_offers(db, cfg)
+        logger.info("Vectorisation en tâche de fond : %s", stats)
+    except Exception as e:
+        logger.warning("Vectorisation en tâche de fond interrompue : %s", e)
 
 
 def main() -> int:

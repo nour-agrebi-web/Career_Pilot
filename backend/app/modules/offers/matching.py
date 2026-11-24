@@ -58,6 +58,14 @@ class MatchResult:
     missing_skills: list[str] = field(default_factory=list)
 
 
+def city_matches(wanted: list[str], offer_city: str | None) -> bool:
+    """Ville souhaitée trouvée dans la ville de l'offre, en mot entier, sans accents ni majuscules.
+    Les sites écrivent « Tunis », « Tunis, Tunisie » ou « Centre Urbain Nord, Tunis » : une égalité
+    stricte éliminait la plupart des offres collectées. « Tunis » ne trouve pas « Tunisie »."""
+    city = normalize(offer_city)
+    return any(re.search(rf"(?<![a-z]){re.escape(normalize(w))}(?![a-z])", city) for w in wanted if normalize(w))
+
+
 def eliminated(profile: dict, prefs: dict, offer: dict) -> str | None:
     """Filtres éliminatoires ; renvoie la raison, ou None si l'offre reste candidate."""
     if offer.get("status", "ACTIVE") != "ACTIVE":
@@ -65,8 +73,7 @@ def eliminated(profile: dict, prefs: dict, offer: dict) -> str | None:
     if offer["type"] not in prefs["job_types"]:
         return "type d'offre non souhaité"
     if offer.get("work_mode") != "teletravail" and prefs.get("locations"):
-        cities = {normalize(loc["city"]) for loc in prefs["locations"]}
-        if normalize((offer.get("location") or {}).get("city")) not in cities:
+        if not city_matches([loc["city"] for loc in prefs["locations"]], (offer.get("location") or {}).get("city")):
             return "zone hors périmètre"
     if offer.get("work_mode") == "teletravail" and not prefs.get("remote_work", True) and prefs.get("locations"):
         return "télétravail non souhaité"

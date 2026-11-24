@@ -26,18 +26,22 @@ class MatchRepository(private val api: CareerPilotApi, private val dao: MatchDao
      */
     suspend fun refresh(runMatching: Boolean): ApiResult<Int> {
         var newMatches = 0
+        var matchingError: ApiResult.Error? = null
         if (runMatching) {
             when (val run = safeApiCall { api.refreshMatches() }) {
                 is ApiResult.Success -> newMatches = run.data.newMatches
-                is ApiResult.Error -> if (run.code != 409) return run
+                // 409 : profil non validé, on affiche le cache. Autre échec (délai dépassé pendant que le
+                // serveur calcule, erreur 500…) : on charge quand même les offres déjà trouvées, puis on
+                // signale l'erreur. Avant, le fil restait vide alors que le serveur avait des correspondances.
+                is ApiResult.Error -> if (run.code != 409) matchingError = run
             }
         }
         return when (val result = safeApiCall { api.getMatches() }) {
             is ApiResult.Success -> {
                 dao.replaceAll(result.data.map { it.toEntity() })
-                ApiResult.Success(newMatches)
+                matchingError ?: ApiResult.Success(newMatches)
             }
-            is ApiResult.Error -> result
+            is ApiResult.Error -> matchingError ?: result
         }
     }
 

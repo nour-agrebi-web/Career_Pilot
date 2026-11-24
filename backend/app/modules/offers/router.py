@@ -1,13 +1,13 @@
 from datetime import datetime, timezone
 from enum import Enum
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
 from pymongo import DESCENDING
 from pymongo.database import Database
 from app.core.ids import parse_id
 from app.db.mongo import get_db
 from app.modules.auth.deps import get_current_user
-from app.modules.offers.indexing import semantic_scores
+from app.modules.offers.indexing import index_offers_quietly, semantic_scores
 from app.modules.offers.matching import score
 from app.modules.preferences.router import get_preferences
 from app.modules.profile import service as profiles
@@ -78,8 +78,16 @@ def get_offer(offer_id: str, _: dict = Depends(get_current_user), db: Database =
 
 # --- Correspondances (matches) de l'utilisateur connecté ---
 
+# Offres vectorisées au plus pendant une actualisation. Sur un PC sans GPU, Ollama traite quelques dizaines
+# d'offres par seconde au mieux : vectoriser d'un coup les centaines d'offres d'un premier passage du scraper
+# dépassait le délai de 30 s de l'app, qui abandonnait la requête et n'affichait rien. Le reste est
+# vectorisé en tâche de fond, après la réponse ; en attendant, ces offres sont scorées par mots-clés.
+REFRESH_EMBED_BUDGET = 64
+
+
 @router.post("/matches/refresh")
-def refresh_matches(user: dict = Depends(get_current_user), db: Database = Depends(get_db)):
+def refresh_matches(background: BackgroundTasks, user: dict = Depends(get_current_user),
+                    db: Database = Depends(get_db)):
     """Lance un cycle de matching pour l'utilisateur (normalement fait par le planificateur)."""
     profile = profiles.get_or_create(db, user["_id"])
     if not profile.get("validated"):
@@ -88,7 +96,10 @@ def refresh_matches(user: dict = Depends(get_current_user), db: Database = Depen
     now = datetime.now(timezone.utc)
     created = 0
     # Similarité sémantique (embeddings) ; None si Ollama ou Qdrant ne répond pas -> mots-clés.
-    similarities = semantic_scores(db, profile)
+    index_stats: dict = {}
+    similarities = semantic_scores(db, profile, max_new=REFRESH_EMBED_BUDGET, stats_out=index_stats)
+    if index_stats.get("restantes"):
+        background.add_task(index_offers_quietly, db)
     for offer in db.offers.find({"status": "ACTIVE"}):
         result = score(profile, prefs, offer, (similarities or {}).get(str(offer["_id"])))
         if result is None or result.score < prefs["threshold"]:
@@ -104,7 +115,8 @@ def refresh_matches(user: dict = Depends(get_current_user), db: Database = Depen
             upsert=True,
         )
         created += 1 if update.upserted_id else 0
-    return {"new_matches": created, "semantic_engine": "embeddings" if similarities is not None else "mots-cles"}
+    return {"new_matches": created, "semantic_engine": "embeddings" if similarities is not None else "mots-cles",
+            "offers_pending_embedding": index_stats.get("restantes", 0)}
 
 
 @router.get("/matches")
