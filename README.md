@@ -38,6 +38,7 @@ copy .env.example .env              # puis mettre un vrai JWT_SECRET
 python -m seeds.seed_dev            # comptes de test (mot de passe : motdepasse123)
 python -m app                       # API sur http://127.0.0.1:8000/docs (écoute sur 0.0.0.0)
 pytest                              # lance les tests (base careerpilot_test)
+python -m app.modules.offers.diagnostic votre@email   # offres en base absentes de l'app : quelle étape bloque
 ```
 
 Générer un `JWT_SECRET` : `python -c "import secrets; print(secrets.token_urlsafe(64))"`.

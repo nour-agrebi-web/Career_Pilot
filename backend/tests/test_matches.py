@@ -1,5 +1,5 @@
 from seeds.offers_dev import seed_offers
-from app.modules.offers.matching import score
+from app.modules.offers.matching import city_matches, score
 
 
 def build_profile(client, headers):
@@ -73,3 +73,42 @@ def test_offre_sans_ville_ni_description_ne_plante_pas():
              "location": {"city": None, "country": None}, "description": None}
     assert score(profile, prefs, offer) is None          # hors zone, mais sans erreur
     assert score(profile, {**prefs, "locations": []}, {**offer, "location": None}) is not None
+
+
+def test_ville_reconnue_dans_les_formats_des_sites():
+    assert city_matches(["Tunis"], "Tunis")
+    assert city_matches(["tunis"], "Centre Urbain Nord, Tunis")
+    assert city_matches(["Tunis"], "TUNIS, Tunisie")
+    assert city_matches(["La Marsa"], "la marsa")
+    assert city_matches(["Béja"], "Beja")
+    assert not city_matches(["Tunis"], "Tunisie")          # le pays seul ne vaut pas la ville
+    assert not city_matches(["Tunis"], "Sfax")
+    assert not city_matches(["Tunis"], None)
+    assert not city_matches([""], "Tunis")
+
+
+def test_offre_avec_ville_au_format_du_site_non_eliminee():
+    profile = {"skills": [{"name": "Python"}], "languages": [], "level": "junior"}
+    prefs = {"job_types": ["emploi"], "locations": [{"city": "Tunis"}], "remote_work": True}
+    offer = {"title": "Dev Python", "type": "emploi", "required_skills": ["Python"],
+             "location": {"city": "Centre Urbain Nord, Tunis", "country": "Tunisie"}}
+    assert score(profile, prefs, offer) is not None
+
+
+def test_diagnostic_indique_l_etape_qui_bloque(client, headers, db):
+    from app.modules.offers.diagnostic import diagnose
+    seed_offers(db)
+    lines = diagnose(db, "nour@example.com")
+    assert lines[-1].startswith("BLOQUÉ : le profil n'est pas validé")
+
+    build_profile(client, headers)
+    client.put("/preferences", headers=headers, json={"job_types": ["stage"], "locations": [{"city": "Sfax"}],
+                                                      "threshold": 50})
+    lines = diagnose(db, "nour@example.com")
+    assert any("zone hors périmètre" in l for l in lines) and lines[-1].startswith("BLOQUÉ : toutes les offres")
+
+    client.put("/preferences", headers=headers, json={"job_types": ["stage"], "threshold": 50})
+    assert "aucune correspondance n'est enregistrée" in diagnose(db, "nour@example.com")[-1]
+    client.post("/matches/refresh", headers=headers)
+    assert diagnose(db, "nour@example.com")[-1].startswith("OK :")
+    assert diagnose(db, "personne@example.com") == ["Aucun compte avec l'e-mail personne@example.com."]

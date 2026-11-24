@@ -55,7 +55,7 @@ def test_seules_les_offres_nouvelles_ou_modifiees_sont_vectorisees(db, monkeypat
     calls = []
     monkeypatch.setattr(indexing, "embed_documents", lambda texts, cfg: calls.append(texts) or fake_embed(texts))
     seed_offers(db)
-    assert indexing.index_offers(db) == {"vectorisees": len(OFFERS), "inchangees": 0, "retirees": 0}
+    assert indexing.index_offers(db) == {"vectorisees": len(OFFERS), "inchangees": 0, "retirees": 0, "restantes": 0}
     points = offer_points()
     assert len(points) == len(OFFERS)
     ids = {str(o["_id"]) for o in db.offers.find()}
@@ -157,3 +157,25 @@ def test_conversion_du_cosinus_et_offre_non_vectorisee():
     assert score(profile, prefs, offer).breakdown["semantic"] == round(40 * keyword_ratio(profile, offer))
     assert score(profile, prefs, offer, similarity=0.9).breakdown["semantic"] == 40
     assert score(profile, prefs, offer, similarity=0.1).breakdown["semantic"] == 0
+
+
+def test_actualisation_rapide_le_reste_vectorise_en_tache_de_fond(client, headers, db, monkeypatch):
+    # Des centaines d'offres du scraper d'un coup : l'actualisation n'en vectorise qu'une partie (sinon l'app,
+    # qui attend 30 s au plus, abandonnait la requête et n'affichait rien), le reste suit en tâche de fond.
+    from app.modules.offers import router
+    monkeypatch.setattr(router, "REFRESH_EMBED_BUDGET", 2)
+    calls = []
+    monkeypatch.setattr(indexing, "embed_documents", lambda t, cfg=None: calls.append(len(t)) or topic_documents(t))
+    monkeypatch.setattr(indexing, "embed_query", topic_query)
+    build_profile(client, headers)
+    client.put("/preferences", headers=headers, json={"job_types": ["stage"], "threshold": 50})
+    for i in range(5):
+        add_offer(db, title=f"Développeur Android Kotlin {i}", required_skills=["Kotlin", "Android"])
+
+    response = client.post("/matches/refresh", headers=headers).json()
+    assert response["semantic_engine"] == "embeddings"
+    assert response["offers_pending_embedding"] == 3
+    assert len(client.get("/matches", headers=headers).json()) == 5       # aucune offre perdue entre-temps
+    # TestClient exécute la tâche de fond après la réponse : tout est vectorisé ensuite.
+    assert calls[0] == 2 and len(offer_points()) == 5
+    assert client.post("/matches/refresh", headers=headers).json()["offers_pending_embedding"] == 0
