@@ -12,6 +12,7 @@ import logging
 import re
 import xml.etree.ElementTree as ET
 
+from ..categories import split_labels
 from ..normalize import contract_type, strip_html, work_mode
 from .base import Listing, Source
 
@@ -127,6 +128,8 @@ class Keejob(Source):
             "contract": contract_type(meta.get("type de contrat"), item.get("title")) or item.get("contract"),
             "published_at": _iso(meta.get("date de publication")) or item.get("published_at"),
             "expires_at": _iso(meta.get("date d'expiration")),
+            # Rubrique du site (« Métiers ») : sert à la catégorie de l'offre (voir categories.py).
+            "source_categories": split_labels(meta.get("métiers") or meta.get("métier")),
             "description": "\n".join(filter(None, [
                 description,
                 f"Expérience : {meta['expérience']}" if meta.get("expérience") else None,

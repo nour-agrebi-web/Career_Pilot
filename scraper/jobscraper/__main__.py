@@ -5,6 +5,7 @@
   python -m jobscraper list  [--seuil 70] [--limit 20]      # lecture seule : aucune requête réseau
   python -m jobscraper rescore                              # recalcule après modification du profil, hors ligne
   python -m jobscraper stats
+  python -m jobscraper categories [--toutes]                # rattrape la catégorie des offres en base, hors ligne
 """
 from __future__ import annotations
 
@@ -48,6 +49,8 @@ def main(argv: list[str] | None = None, mongo_client=None) -> int:
     ls.add_argument("--limit", type=int, default=20)
     sub.add_parser("rescore", help="scorer sans réseau (profil modifié)")
     sub.add_parser("stats", help="répartition des scores et dernière exécution")
+    c = sub.add_parser("categories", help="rattraper la catégorie des offres déjà en base (sans réseau)")
+    c.add_argument("--toutes", action="store_true", help="recalculer aussi les offres qui ont déjà une catégorie")
     a = ap.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO if a.verbose else logging.WARNING,
@@ -93,6 +96,12 @@ def main(argv: list[str] | None = None, mongo_client=None) -> int:
             flag = " (score partiel)" if d.get("partiel") else ""
             print(f"{row['score']:>3}  {row['title']} | {row.get('company') or '?'} | {loc.get('city') or '?'} "
                   f"| {row['source']}{flag}\n     {row['url']}\n     trouvées : {', '.join(d['trouvees']) or '-'}")
+    elif a.cmd == "categories":
+        st = storage.backfill_categories(all_offers=a.toutes)
+        print(f"{sum(st.values())} offre(s) traitée(s) : {st['site']} avec la rubrique du site, "
+              f"{st['deduite']} déduite(s) du texte, {st['sans_categorie']} sans catégorie.")
+        for row in storage.category_counts():
+            print(f"  {row['_id'] or '(aucune)'} : {row['n']}")
     elif a.cmd == "stats":
         for st in storage.source_stats():
             print(f"{st['_id']}: {st['n']} offres ({st['detail']} avec détail, {st['actives']} actives)")

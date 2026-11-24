@@ -8,16 +8,17 @@ import java.text.Normalizer
  * - Correspondance par mot entier, sans tenir compte de la casse ni des accents :
  *   « IT » ne trouve plus « littéraire », « developpeur » trouve « Développeur ».
  *   Un mot de 4 lettres ou plus trouve aussi les mots qui commencent par lui (« pyth » → « Python »).
- * - Correspondance par domaine : « IA », « IT », « informatique », « mécanique », « développement »…
- *   trouvent les offres qui parlent de ce domaine (titre, description, compétences) même si le mot
- *   tapé n'y figure pas. Les offres n'ont pas de champ catégorie : le domaine est déduit d'une liste
- *   de mots-clés, à tenir alignée avec backend/app/modules/offers/search.py.
+ * - Correspondance par catégorie : « IA », « IT », « informatique », « mécanique », « développement »…
+ *   trouvent les offres de cette catégorie. Le scraper enregistre la catégorie de chaque offre
+ *   ([Offer.categories], lue sur le site ou déduite) : elle est utilisée telle quelle. Pour une offre
+ *   sans catégorie connue (null), elle est déduite d'une liste de mots-clés (repli), à tenir alignée
+ *   avec backend/app/modules/offers/search.py et scraper/jobscraper/categories.py.
  * - Les sigles courts (IA, IT, AI…) ne comptent dans un titre ou une description que s'ils y sont
  *   écrits en majuscules, pour ne pas confondre « IT » avec le pronom anglais « it » ni « AI » avec « j'ai ».
  */
 object OfferSearch {
 
-    private class Domain(val aliases: Set<String>, rawKeywords: List<String>) {
+    private class Domain(val name: String, val aliases: Set<String>, rawKeywords: List<String>) {
         /** Mots-clés déjà normalisés, calculés une fois et non à chaque frappe. */
         val keywords: List<String> by lazy { rawKeywords.map { tokens(it).joinToString(" ") } }
     }
@@ -45,13 +46,15 @@ object OfferSearch {
     ) + DEV_KEYWORDS + AI_KEYWORDS
 
     private val DOMAINS = listOf(
-        Domain(setOf("ia", "ai", "intelligence artificielle", "artificial intelligence", "machine learning"), AI_KEYWORDS),
-        Domain(setOf("it", "informatique", "info", "tic", "technologies de l information"), IT_KEYWORDS),
+        Domain("IA", setOf("ia", "ai", "intelligence artificielle", "artificial intelligence", "machine learning"), AI_KEYWORDS),
+        Domain("IT", setOf("it", "informatique", "info", "tic", "technologies de l information"), IT_KEYWORDS),
         Domain(
+            "Développement",
             setOf("developpement", "developpeur", "developpeuse", "developper", "dev", "programmation", "developer", "development"),
             DEV_KEYWORDS,
         ),
         Domain(
+            "Mécanique",
             setOf("mecanique", "meca", "mecanicien", "mecanicienne", "genie mecanique"),
             listOf(
                 "mecanique", "mecanicien", "mecanicienne", "genie mecanique", "electromecanique", "electromecanicien",
@@ -61,6 +64,7 @@ object OfferSearch {
             ),
         ),
         Domain(
+            "Électrique",
             setOf("electrique", "electricite", "electronique", "electricien", "genie electrique"),
             listOf(
                 "electrique", "electricite", "electricien", "electronique", "electronicien", "genie electrique",
@@ -68,6 +72,7 @@ object OfferSearch {
             ),
         ),
         Domain(
+            "Finance",
             setOf("finance", "comptabilite", "comptable", "audit", "banque"),
             listOf(
                 "finance", "financier", "financiere", "comptabilite", "comptable", "audit", "auditeur", "fiscalite",
@@ -75,6 +80,7 @@ object OfferSearch {
             ),
         ),
         Domain(
+            "Marketing",
             setOf("marketing", "communication", "digital marketing", "marketing digital"),
             listOf(
                 "marketing", "communication", "community manager", "seo", "sea", "content", "contenu",
@@ -82,6 +88,7 @@ object OfferSearch {
             ),
         ),
         Domain(
+            "Commercial",
             setOf("commercial", "vente", "ventes", "commerciale"),
             listOf(
                 "commercial", "commerciale", "vente", "ventes", "vendeur", "vendeuse", "business developer",
@@ -89,6 +96,7 @@ object OfferSearch {
             ),
         ),
         Domain(
+            "RH",
             setOf("rh", "ressources humaines", "recrutement"),
             listOf("rh", "ressources humaines", "recrutement", "recruteur", "talent acquisition", "paie", "gestion du personnel"),
         ),
@@ -102,13 +110,17 @@ object OfferSearch {
         val normalizedQuery = tokens(query).joinToString(" ")
         if (normalizedQuery.isEmpty()) return true
         val text = OfferText(offer)
-        // La recherche entière peut désigner un domaine (« intelligence artificielle »).
-        domainOf(normalizedQuery)?.let { if (text.hasAny(it.keywords)) return true }
-        // Sinon chaque mot doit être trouvé, comme mot entier ou comme domaine.
+        // La recherche entière peut désigner une catégorie (« intelligence artificielle »).
+        domainOf(normalizedQuery)?.let { if (inCategory(offer, it, text)) return true }
+        // Sinon chaque mot doit être trouvé, comme mot entier ou comme catégorie.
         return normalizedQuery.split(' ').all { word ->
-            text.hasWord(word) || domainOf(word)?.let { text.hasAny(it.keywords) } == true
+            text.hasWord(word) || domainOf(word)?.let { inCategory(offer, it, text) } == true
         }
     }
+
+    /** Catégorie enregistrée par le scraper si l'offre en a une ; sinon déduite des mots-clés (repli). */
+    private fun inCategory(offer: Offer, domain: Domain, text: OfferText): Boolean =
+        offer.categories?.contains(domain.name) ?: text.hasAny(domain.keywords)
 
     private fun domainOf(normalized: String): Domain? = DOMAINS.firstOrNull { normalized in it.aliases }
 

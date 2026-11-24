@@ -97,6 +97,11 @@ data class Offer(
     val source: String,
     val url: String?,
     val publicationDate: String?,
+    /**
+     * Catégories de l'offre (« IT », « IA », « Développement », « Mécanique »…), lues sur le site ou déduites
+     * par le scraper. null : offre pas encore catégorisée, la recherche se rabat alors sur les mots-clés.
+     */
+    val categories: List<String>? = null,
 )
 
 data class ScoreBreakdown(val semantic: Int, val skills: Int, val level: Int, val preferences: Int)

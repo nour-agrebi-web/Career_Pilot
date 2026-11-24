@@ -80,4 +80,36 @@ class OfferSearchTest {
         assertEquals(listOf(android.title), search("développeur kotlin"))
         assertTrue(search("développeur soudure").isEmpty())
     }
+
+    // --- Catégorie enregistrée par le scraper ---
+
+    @Test
+    fun `la categorie enregistree prime sur les mots-cles`() {
+        // Le texte parle de Python, mais le site range l'offre en Finance.
+        val analyste = offer(title = "Analyste financier", skills = listOf("Python"),
+            description = "Modèles Excel et scripts Python.", categories = listOf("Finance"))
+        assertFalse(OfferSearch.matches(analyste, "développement"))
+        assertTrue(OfferSearch.matches(analyste, "finance"))
+        assertTrue(OfferSearch.matches(analyste, "Comptabilité"))
+        // Rangée en IA par le site, trouvée même si le texte ne le dit pas.
+        val rd = offer(title = "Ingénieur R&D", skills = emptyList(), description = "Projet innovant.",
+            categories = listOf("IA", "IT"))
+        assertTrue(OfferSearch.matches(rd, "IA"))
+        assertTrue(OfferSearch.matches(rd, "informatique"))
+        assertFalse(OfferSearch.matches(rd, "mécanique"))
+    }
+
+    @Test
+    fun `categorie vide - seul le mot ecrit dans l'offre compte`() {
+        val conseiller = offer(title = "Conseiller mécanique auto", skills = emptyList(),
+            description = "Accueil clients.", categories = emptyList())
+        assertTrue(OfferSearch.matches(conseiller, "mécanique"))
+        assertFalse(OfferSearch.matches(conseiller, "IT"))
+    }
+
+    @Test
+    fun `sans categorie connue - repli sur les mots-cles`() {
+        assertEquals(null, dataScientist.categories)
+        assertTrue(OfferSearch.matches(dataScientist, "IA"))
+    }
 }
